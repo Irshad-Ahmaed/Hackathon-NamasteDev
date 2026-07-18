@@ -123,7 +123,14 @@ export default function ChatPage() {
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
 
   // Derive notes content directly from conversation history to avoid duplicate state and cascading renders
-  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+  let lastAssistant: Message | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') {
+      lastAssistant = messages[i];
+      break;
+    }
+  }
+  
   const derivedNotesContent = activeMessage && mode === 'notes'
     ? activeMessage.content 
     : (lastAssistant ? lastAssistant.content : '');
