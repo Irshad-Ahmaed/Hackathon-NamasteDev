@@ -91,7 +91,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   const assistantMessageId = crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
-  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG);
+  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat);
   const openaiClient = openai;
   
   const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
