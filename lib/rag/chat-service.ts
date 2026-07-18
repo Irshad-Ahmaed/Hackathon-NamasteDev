@@ -40,7 +40,16 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
     conversationId = await createConversation(tenantId, userId, subject, chapterId);
   }
   
-  await saveMessage(conversationId, 'user', message, userId, tenantId, { subject, chapterId, mode });
+  // Mode-based RAG bypass routing:
+  // If the user selects "general" chat mode, we bypass RAG context search and let the model answer freely.
+  // If the user selects any academic mode (explain, solve, notes, quiz), they are strictly bound to RAG context.
+  const isGeneralChat = mode === 'general';
+  
+  await saveMessage(conversationId, 'user', message, userId, tenantId, { 
+    subject, 
+    chapterId, 
+    mode: isGeneralChat ? undefined : mode 
+  });
 
   // 4. Fetch History
   const history = await fetchHistory(conversationId, userId, tenantId);
@@ -51,9 +60,12 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   let contextResults: RetrievalResult[] = [];
   let citations: CitationMetadata[] = [];
   let topScore = 1.0;
-  const isChitchat = category === 'chitchat';
+  
+  // Decide whether to bypass retrieval:
+  // Bypass if the user explicitly chose General Chat, OR if reformulation classified it as chitchat
+  const bypassRAG = isGeneralChat || category === 'chitchat';
 
-  if (!isChitchat) {
+  if (!bypassRAG) {
     // 6. Retrieve Context (with filters!)
     contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
     citations = buildCitations(contextResults);
@@ -66,7 +78,11 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
       const assistantMessageId = crypto.randomUUID();
       await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
         id: assistantMessageId,
-        subject, mode, outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
+        subject, 
+        mode: isGeneralChat ? undefined : mode, 
+        outcome: 'low_confidence', 
+        retrievalTopScore: topScore, 
+        retrievedChunkCount: 0 
       });
       return createStaticStream(fallbackText, conversationId, citations, 'refusal', assistantMessageId);
     }
@@ -75,7 +91,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   const assistantMessageId = crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
-  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, isChitchat);
+  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat);
   const openaiClient = openai;
   
   const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
@@ -126,7 +142,12 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
         // 10. Save assistant message after stream completes
         await saveMessage(conversationId!, 'assistant', fullResponse, userId, tenantId, {
            id: assistantMessageId,
-           subject, mode, outcome: 'success', retrievalTopScore: topScore, retrievedChunkCount: contextResults.length, model: selectedModel
+           subject, 
+           mode: isGeneralChat ? undefined : mode, 
+           outcome: 'success', 
+           retrievalTopScore: topScore, 
+           retrievedChunkCount: contextResults.length, 
+           model: selectedModel
         });
       } catch (err) {
         console.error('Streaming error:', err);

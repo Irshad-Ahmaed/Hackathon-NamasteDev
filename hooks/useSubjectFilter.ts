@@ -2,7 +2,7 @@
 import { useState } from 'react';
 
 export type Subject = 'mathematics' | 'science';
-export type Mode = 'explain' | 'solve' | 'notes' | 'quiz';
+export type Mode = 'explain' | 'solve' | 'notes' | 'quiz' | 'general';
 
 export function useSubjectFilter() {
   const [subject, setSubject] = useState<Subject>('mathematics');

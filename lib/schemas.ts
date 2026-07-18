@@ -11,7 +11,7 @@ export const ChatRequestSchema = z.object({
   language: z.enum(['en', 'hi']),
   conversationId: z.string().uuid().optional(),
   chapterId: z.string().optional(),
-  mode: z.enum(['explain', 'solve', 'notes', 'quiz']),
+  mode: z.enum(['explain', 'solve', 'notes', 'quiz', 'general']),
 });
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;

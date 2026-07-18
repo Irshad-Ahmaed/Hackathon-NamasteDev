@@ -227,50 +227,61 @@ export default function ChatPage() {
             {/* Integrated Controls Row */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5 text-xs text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
-                {/* Subject Selector */}
-                <select 
-                  value={subject} 
-                  onChange={(e) => {
-                    setSubject(e.target.value as Subject);
-                    setChapterId(undefined);
-                  }}
-                  className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors"
-                >
-                  <option value="mathematics">📐 Mathematics</option>
-                  <option value="science">🔬 Science</option>
-                </select>
+                
+                {/* General Chat mode badge — shown instead of Subject/Chapter selectors */}
+                {mode === 'general' ? (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/30 text-violet-300 font-medium text-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse inline-block" />
+                    General Chat — no curriculum restrictions
+                  </span>
+                ) : (
+                  <>
+                    {/* Subject Selector */}
+                    <select 
+                      value={subject} 
+                      onChange={(e) => {
+                        setSubject(e.target.value as Subject);
+                        setChapterId(undefined);
+                      }}
+                      className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors"
+                    >
+                      <option value="mathematics">📐 Mathematics</option>
+                      <option value="science">🔬 Science</option>
+                    </select>
 
-                {/* Chapter Selector */}
-                <select
-                  value={chapterId || ''}
-                  onChange={(e) => setChapterId(e.target.value || undefined)}
-                  className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 max-w-[180px] md:max-w-xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors truncate"
-                >
-                  <option value="">📚 All Chapters</option>
-                  {subject === 'mathematics' ? (
-                    <>
-                      <option value="math-ch01">Ch 1: Real Numbers</option>
-                      <option value="math-ch02">Ch 2: Polynomials</option>
-                      <option value="math-ch03">Ch 3: Linear Equations</option>
-                      <option value="math-ch04">Ch 4: Quadratic Equations</option>
-                      <option value="math-ch05">Ch 5: Arithmetic Progressions</option>
-                      <option value="math-ch06">Ch 6: Triangles</option>
-                      <option value="math-ch07">Ch 7: Coordinate Geometry</option>
-                      <option value="math-ch08">Ch 8: Introduction to Trigonometry</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="science-ch01">Ch 1: Chemical Reactions</option>
-                      <option value="science-ch02">Ch 2: Acids, Bases, Salts</option>
-                      <option value="science-ch03">Ch 3: Metals & Non-Metals</option>
-                      <option value="science-ch04">Ch 4: Carbon Compounds</option>
-                      <option value="science-ch05">Ch 5: Life Processes</option>
-                      <option value="science-ch06">Ch 6: Control & Coordination</option>
-                      <option value="science-ch07">Ch 7: How do Organisms Reproduce?</option>
-                      <option value="science-ch08">Ch 8: Heredity</option>
-                    </>
-                  )}
-                </select>
+                    {/* Chapter Selector */}
+                    <select
+                      value={chapterId || ''}
+                      onChange={(e) => setChapterId(e.target.value || undefined)}
+                      className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 max-w-[180px] md:max-w-xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors truncate"
+                    >
+                      <option value="">📚 All Chapters</option>
+                      {subject === 'mathematics' ? (
+                        <>
+                          <option value="math-ch01">Ch 1: Real Numbers</option>
+                          <option value="math-ch02">Ch 2: Polynomials</option>
+                          <option value="math-ch03">Ch 3: Linear Equations</option>
+                          <option value="math-ch04">Ch 4: Quadratic Equations</option>
+                          <option value="math-ch05">Ch 5: Arithmetic Progressions</option>
+                          <option value="math-ch06">Ch 6: Triangles</option>
+                          <option value="math-ch07">Ch 7: Coordinate Geometry</option>
+                          <option value="math-ch08">Ch 8: Introduction to Trigonometry</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="science-ch01">Ch 1: Chemical Reactions</option>
+                          <option value="science-ch02">Ch 2: Acids, Bases, Salts</option>
+                          <option value="science-ch03">Ch 3: Metals & Non-Metals</option>
+                          <option value="science-ch04">Ch 4: Carbon Compounds</option>
+                          <option value="science-ch05">Ch 5: Life Processes</option>
+                          <option value="science-ch06">Ch 6: Control & Coordination</option>
+                          <option value="science-ch07">Ch 7: How do Organisms Reproduce?</option>
+                          <option value="science-ch08">Ch 8: Heredity</option>
+                        </>
+                      )}
+                    </select>
+                  </>
+                )}
                 
                 {/* Learning Mode Selector */}
                 <select 
@@ -282,6 +293,7 @@ export default function ChatPage() {
                   <option value="solve">📝 Solve Problem</option>
                   <option value="notes">📓 Generate Notes</option>
                   <option value="quiz">🎯 Quiz Me</option>
+                  <option value="general">💬 General Chat</option>
                 </select>
               </div>
 
