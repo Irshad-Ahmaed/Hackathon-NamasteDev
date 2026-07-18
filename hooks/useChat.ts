@@ -55,7 +55,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
         setConversationId(event.conversationId);
         setMessages(prev => prev.map(m =>
           m.id === assistantId
-            ? { ...m, citations: event.citations as Citation[], outcome: event.outcome }
+            ? { ...m, id: event.assistantMessageId || m.id, citations: event.citations as Citation[], outcome: event.outcome }
             : m
         ));
       } else if (event.type === 'token') {

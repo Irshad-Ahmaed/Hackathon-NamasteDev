@@ -2,7 +2,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 export type StreamEvent =
-  | { type: 'init'; conversationId: string; citations: unknown[]; outcome: string }
+  | { type: 'init'; conversationId: string; citations: unknown[]; outcome: string; assistantMessageId?: string }
   | { type: 'token'; content: string }
   | { type: 'error'; code: string; message: string }
   | { type: 'done' };

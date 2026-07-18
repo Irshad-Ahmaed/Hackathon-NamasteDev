@@ -6,6 +6,7 @@ import { buildPrompt } from './prompt';
 import { ChatRequest, CitationMetadata, detectPromptInjection } from '../schemas';
 import { saveMessage, fetchHistory, createConversation } from '../../server/conversation-service';
 import { AppError, SAFE_ESCALATION_MESSAGE } from '../errors';
+import crypto from 'crypto';
 
 export interface ChatServiceOptions {
   userId: string;
@@ -56,11 +57,15 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   if (topScore < 0.2) {
     // Low confidence -> Fallback
     const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
+    const assistantMessageId = crypto.randomUUID();
     await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
+      id: assistantMessageId,
       subject, mode, outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
     });
-    return createStaticStream(fallbackText, conversationId, citations, 'refusal');
+    return createStaticStream(fallbackText, conversationId, citations, 'refusal', assistantMessageId);
   }
+
+  const assistantMessageId = crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
   const promptMessages = buildPrompt(history, standaloneQuery, contextResults);
@@ -82,7 +87,8 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
         type: 'init',
         conversationId: conversationId!,
         citations,
-        outcome: 'success'
+        outcome: 'success',
+        assistantMessageId
       });
       controller.enqueue(`data: ${initEvent}\n\n`);
 
@@ -112,6 +118,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
         // 10. Save assistant message after stream completes
         await saveMessage(conversationId!, 'assistant', fullResponse, userId, tenantId, {
+           id: assistantMessageId,
            subject, mode, outcome: 'success', retrievalTopScore: topScore, retrievedChunkCount: contextResults.length, model: selectedModel
         });
       } catch (err) {
@@ -125,10 +132,10 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   });
 }
 
-function createStaticStream(text: string, conversationId: string, citations: CitationMetadata[] = [], outcome: 'success'|'refusal' = 'success'): ReadableStream {
+function createStaticStream(text: string, conversationId: string, citations: CitationMetadata[] = [], outcome: 'success'|'refusal' = 'success', assistantMessageId?: string): ReadableStream {
   return new ReadableStream({
     start(controller) {
-      const initEvent = JSON.stringify({ type: 'init', conversationId, citations, outcome });
+      const initEvent = JSON.stringify({ type: 'init', conversationId, citations, outcome, assistantMessageId });
       controller.enqueue(`data: ${initEvent}\n\n`);
       
       const tokenEvent = JSON.stringify({ type: 'token', content: text });

@@ -14,14 +14,24 @@ import { NotesCanvas } from '@/components/NotesCanvas';
 const mathPlugin = createMathPlugin({ singleDollarTextMath: true });
 
 // Message component wrapped in React.memo to prevent re-rendering historical messages
-const ChatMessage = React.memo(({ message }: { message: Message }) => {
+const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: { 
+  message: Message; 
+  onFeedback?: (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => void;
+  feedbackStatus?: string;
+}) => {
   return (
     <div className={`p-4 my-2 rounded-xl ${message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto max-w-[80%]' : 'bg-muted text-foreground mr-auto max-w-[100%]'}`}>
       <div className="font-semibold text-sm mb-1 opacity-70">
         {message.role === 'user' ? 'You' : 'Tutor'}
       </div>
       <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-        <Streamdown plugins={{ math: mathPlugin }}>{message.content}</Streamdown>
+        {message.streaming && !message.content ? (
+          <div className="animate-pulse flex space-x-2 items-center text-muted-foreground italic">
+            <span>Tutor is thinking...</span>
+          </div>
+        ) : (
+          <Streamdown plugins={{ math: mathPlugin }}>{message.content}</Streamdown>
+        )}
       </div>
       {message.citations && message.citations.length > 0 && (
         <div className="mt-4 pt-3 border-t border-border flex flex-wrap gap-2">
@@ -38,17 +48,64 @@ const ChatMessage = React.memo(({ message }: { message: Message }) => {
           ))}
         </div>
       )}
+      {message.role === 'assistant' && !message.streaming && onFeedback && (
+        <div className="mt-3 pt-2 border-t border-border/50 flex flex-wrap items-center gap-4 text-xs">
+          <button 
+            onClick={() => onFeedback(message.id, 'helpful')}
+            className="hover:text-blue-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+          >
+            👍 Helpful
+          </button>
+          <button 
+            onClick={() => onFeedback(message.id, 'incorrect')}
+            className="hover:text-amber-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+          >
+            👎 This is incorrect
+          </button>
+          <button 
+            onClick={() => onFeedback(message.id, 'inappropriate')}
+            className="hover:text-red-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+          >
+            🚩 Report answer
+          </button>
+          {feedbackStatus && (
+            <span className="text-slate-400 font-normal italic ml-auto">{feedbackStatus}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 });
 ChatMessage.displayName = 'ChatMessage';
 
 export default function ChatPage() {
-  const { subject, setSubject, mode, setMode } = useSubjectFilter();
-  const { messages, sendMessage, streaming, cancel } = useChat(subject, 'en');
+  const { subject, setSubject, chapterId, setChapterId, mode, setMode } = useSubjectFilter();
+  const { messages, sendMessage, streaming, cancel } = useChat(subject, 'en', chapterId);
   const [inputText, setInputText] = useState('');
   const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [notesContent, setNotesContent] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
+
+  const handleFeedback = React.useCallback(async (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => {
+    try {
+      setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Submitting...' }));
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, type })
+      });
+      if (res.ok) {
+        setFeedbackStatus(prev => ({ 
+          ...prev, 
+          [messageId]: `Feedback submitted: ${type === 'helpful' ? 'Helpful' : type === 'incorrect' ? 'Incorrect' : 'Reported'}` 
+        }));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setFeedbackStatus(prev => ({ ...prev, [messageId]: `Error: ${err.error || 'Failed to submit'}` }));
+      }
+    } catch {
+      setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Network error. Please try again.' }));
+    }
+  }, []);
   
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +114,6 @@ export default function ChatPage() {
     // If asking for notes, open the canvas and let the chat display it there
     if (mode === 'notes') {
       setIsNotesOpen(true);
-      setNotesContent('');
     }
     
     sendMessage(inputText, { mode });
@@ -65,29 +121,63 @@ export default function ChatPage() {
   };
   
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
-  if (activeMessage && mode === 'notes') {
-    // Keep NotesCanvas content in sync
-    if (notesContent !== activeMessage.content) {
-      setNotesContent(activeMessage.content);
-    }
-  }
+
+  // Derive notes content directly from conversation history to avoid duplicate state and cascading renders
+  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+  const derivedNotesContent = activeMessage && mode === 'notes'
+    ? activeMessage.content 
+    : (lastAssistant ? lastAssistant.content : '');
 
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="flex-none flex items-center justify-between p-4 border-b bg-card text-card-foreground shadow-sm">
-        <div className="font-bold text-xl flex items-center gap-2">
-          <span className="text-primary">✦</span> CBSE Tutor
+      <header className="flex-none flex items-center justify-between p-4 border-b bg-card text-card-foreground shadow-sm overflow-x-auto">
+        <div className="font-bold text-xl flex items-center gap-2 whitespace-nowrap">
+          <span className="text-primary">✦</span> StudyNotes+
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 ml-4">
           <select 
             value={subject} 
-            onChange={(e) => setSubject(e.target.value as Subject)}
+            onChange={(e) => {
+              setSubject(e.target.value as Subject);
+              setChapterId(undefined); // Reset chapter when subject changes
+            }}
             className="bg-secondary text-secondary-foreground text-sm rounded-md border-none p-2 focus:ring-2 focus:ring-ring"
           >
             <option value="mathematics">Mathematics</option>
             <option value="science">Science</option>
+          </select>
+
+          <select
+            value={chapterId || ''}
+            onChange={(e) => setChapterId(e.target.value || undefined)}
+            className="bg-secondary text-secondary-foreground text-sm rounded-md border-none p-2 focus:ring-2 focus:ring-ring"
+          >
+            <option value="">All Chapters</option>
+            {subject === 'mathematics' ? (
+              <>
+                <option value="math-ch01">Ch 1: Real Numbers</option>
+                <option value="math-ch02">Ch 2: Polynomials</option>
+                <option value="math-ch03">Ch 3: Linear Equations</option>
+                <option value="math-ch04">Ch 4: Quadratic Equations</option>
+                <option value="math-ch05">Ch 5: Arithmetic Progressions</option>
+                <option value="math-ch06">Ch 6: Triangles</option>
+                <option value="math-ch07">Ch 7: Coordinate Geometry</option>
+                <option value="math-ch08">Ch 8: Introduction to Trigonometry</option>
+              </>
+            ) : (
+              <>
+                <option value="science-ch01">Ch 1: Chemical Reactions and Equations</option>
+                <option value="science-ch02">Ch 2: Acids, Bases and Salts</option>
+                <option value="science-ch03">Ch 3: Metals and Non-Metals</option>
+                <option value="science-ch04">Ch 4: Carbon and its Compounds</option>
+                <option value="science-ch05">Ch 5: Life Processes</option>
+                <option value="science-ch06">Ch 6: Control and Coordination</option>
+                <option value="science-ch07">Ch 7: How do Organisms Reproduce?</option>
+                <option value="science-ch08">Ch 8: Heredity</option>
+              </>
+            )}
           </select>
           
           <select 
@@ -103,7 +193,7 @@ export default function ChatPage() {
 
           <button 
             onClick={() => setIsNotesOpen(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors shadow-sm"
+            className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors shadow-sm whitespace-nowrap"
           >
             Notes Canvas
           </button>
@@ -122,7 +212,12 @@ export default function ChatPage() {
           </div>
         ) : (
           messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
+            <ChatMessage 
+              key={msg.id} 
+              message={msg} 
+              onFeedback={handleFeedback} 
+              feedbackStatus={feedbackStatus[msg.id]} 
+            />
           ))
         )}
       </main>
@@ -165,7 +260,7 @@ export default function ChatPage() {
       <NotesCanvas 
         isOpen={isNotesOpen} 
         onClose={() => setIsNotesOpen(false)} 
-        content={mode === 'notes' ? (activeMessage?.content || notesContent) : notesContent} 
+        content={derivedNotesContent} 
         isGenerating={streaming && mode === 'notes'}
       />
     </div>
