@@ -1,3 +1,4 @@
+import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 
 export function Navbar({ isSignedIn }: { isSignedIn: boolean }) {
@@ -9,12 +10,15 @@ export function Navbar({ isSignedIn }: { isSignedIn: boolean }) {
         </div>
         <div className="flex items-center gap-4">
           {isSignedIn ? (
-            <Link 
-              href="/chat"
-              className="px-4 py-2 rounded-full bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]"
-            >
-              Go to App
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link 
+                href="/chat"
+                className="px-4 py-2 rounded-full bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]"
+              >
+                Go to App
+              </Link>
+              <UserButton />
+            </div>
           ) : (
             <>
               <Link 
