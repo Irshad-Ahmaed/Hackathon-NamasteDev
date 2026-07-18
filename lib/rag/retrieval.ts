@@ -8,7 +8,17 @@ export interface RetrievalResult {
   metadata: Record<string, unknown>;
 }
 
-export async function retrieveContext(query: string, limit: number = 5): Promise<RetrievalResult[]> {
+export interface RetrievalFilters {
+  subject?: string;
+  language?: string;
+  chapterId?: string;
+}
+
+export async function retrieveContext(
+  query: string, 
+  filters?: RetrievalFilters,
+  limit: number = 5
+): Promise<RetrievalResult[]> {
   const openaiClient = openai;
   const qdrantClient = qdrant;
 
@@ -21,18 +31,39 @@ export async function retrieveContext(query: string, limit: number = 5): Promise
   
   const vector = embeddingResponse.data[0].embedding;
 
-  // 2. Search Qdrant with reviewed: true filter
+  // 2. Search Qdrant with reviewed: true filter and metadata filters
+  const must: Record<string, unknown>[] = [
+    {
+      key: 'reviewed',
+      match: { value: true }
+    }
+  ];
+
+  if (filters?.subject) {
+    must.push({
+      key: 'subject',
+      match: { value: filters.subject }
+    });
+  }
+
+  if (filters?.language) {
+    must.push({
+      key: 'language',
+      match: { value: filters.language }
+    });
+  }
+
+  if (filters?.chapterId) {
+    must.push({
+      key: 'chapterId',
+      match: { value: filters.chapterId }
+    });
+  }
+
   const searchResults = await qdrantClient.search(COLLECTION, {
     vector,
     limit,
-    filter: {
-      must: [
-        {
-          key: 'reviewed',
-          match: { value: true }
-        }
-      ]
-    },
+    filter: { must },
     with_payload: true,
   });
 
