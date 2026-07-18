@@ -1,4 +1,7 @@
 #!/usr/bin/env tsx
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env' });
+
 import { qdrant, COLLECTION } from '../lib/qdrant';
 
 async function main() {
@@ -7,14 +10,21 @@ async function main() {
   console.log(`Creating versioned collection: ${collectionName}...`);
 
   try {
-    // 1. Create collection with 1536 dims (text-embedding-3-small dimension)
-    await qdrant.createCollection(collectionName, {
-      vectors: {
-        size: 1536,
-        distance: 'Cosine',
-      },
-    });
-    console.log(`Collection ${collectionName} created successfully.`);
+    // 1. Check if collection already exists
+    const collectionsResult = await qdrant.getCollections();
+    const collectionExists = collectionsResult.collections.some(c => c.name === collectionName);
+
+    if (!collectionExists) {
+      await qdrant.createCollection(collectionName, {
+        vectors: {
+          size: 1536,
+          distance: 'Cosine',
+        },
+      });
+      console.log(`Collection ${collectionName} created successfully.`);
+    } else {
+      console.log(`Collection ${collectionName} already exists. Skipping creation.`);
+    }
 
     // 2. Create payload indexes for fast filtering
     const fieldsToIndex = [

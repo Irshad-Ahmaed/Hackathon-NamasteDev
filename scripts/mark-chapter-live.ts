@@ -1,4 +1,7 @@
 #!/usr/bin/env tsx
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env' });
+
 import { sql } from '../lib/db';
 import { qdrant, COLLECTION } from '../lib/qdrant';
 
