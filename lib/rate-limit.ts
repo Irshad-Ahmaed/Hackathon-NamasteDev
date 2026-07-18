@@ -72,13 +72,15 @@ export async function enforceRateLimits(userId: string, ip: string, useReasoning
       }
     }
   } catch (error) {
-    const err = error as Error;
     if (
-      err.message === 'IP_RATE_LIMIT_EXCEEDED' ||
-      err.message === 'USER_DAILY_LIMIT_EXCEEDED' ||
-      err.message === 'REASONING_DAILY_LIMIT_EXCEEDED'
+      error instanceof Error &&
+      (
+        error.message === 'IP_RATE_LIMIT_EXCEEDED' ||
+        error.message === 'USER_DAILY_LIMIT_EXCEEDED' ||
+        error.message === 'REASONING_DAILY_LIMIT_EXCEEDED'
+      )
     ) {
-      throw err;
+      throw error;
     }
     // Fail open on Redis connectivity or system errors to maintain service availability
     console.error('Rate limiting error (failing open):', error);
