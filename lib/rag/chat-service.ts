@@ -1,7 +1,7 @@
 import { openai, models } from '../openai';
 import { moderateInput, ModeratedStreamBuffer, DistressSignalError } from '../moderation';
 import { reformulateQuery } from './reformulate';
-import { retrieveContext, buildCitations } from './retrieval';
+import { retrieveContext, buildCitations, RetrievalResult } from './retrieval';
 import { buildPrompt } from './prompt';
 import { ChatRequest, CitationMetadata, detectPromptInjection } from '../schemas';
 import { saveMessage, fetchHistory, createConversation } from '../../server/conversation-service';
@@ -45,30 +45,37 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   // 4. Fetch History
   const history = await fetchHistory(conversationId, userId, tenantId);
 
-  // 5. Reformulate Query (pass the latest user message)
-  const standaloneQuery = await reformulateQuery(history.slice(0, -1), message);
+  // 5. Reformulate & Classify Query
+  const { query: standaloneQuery, category } = await reformulateQuery(history.slice(0, -1), message);
 
-  // 6. Retrieve Context (with filters!)
-  const contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
-  const citations = buildCitations(contextResults);
+  let contextResults: RetrievalResult[] = [];
+  let citations: CitationMetadata[] = [];
+  let topScore = 1.0;
+  const isChitchat = category === 'chitchat';
 
-  // 7. Evaluate Retrieval Confidence (Basic Thresholding)
-  const topScore = contextResults[0]?.score || 0;
-  if (topScore < 0.2) {
-    // Low confidence -> Fallback
-    const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
-    const assistantMessageId = crypto.randomUUID();
-    await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
-      id: assistantMessageId,
-      subject, mode, outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
-    });
-    return createStaticStream(fallbackText, conversationId, citations, 'refusal', assistantMessageId);
+  if (!isChitchat) {
+    // 6. Retrieve Context (with filters!)
+    contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
+    citations = buildCitations(contextResults);
+
+    // 7. Evaluate Retrieval Confidence (Basic Thresholding)
+    topScore = contextResults[0]?.score || 0;
+    if (topScore < 0.2) {
+      // Low confidence -> Fallback
+      const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
+      const assistantMessageId = crypto.randomUUID();
+      await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
+        id: assistantMessageId,
+        subject, mode, outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
+      });
+      return createStaticStream(fallbackText, conversationId, citations, 'refusal', assistantMessageId);
+    }
   }
 
   const assistantMessageId = crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
-  const promptMessages = buildPrompt(history, standaloneQuery, contextResults);
+  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, isChitchat);
   const openaiClient = openai;
   
   const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
