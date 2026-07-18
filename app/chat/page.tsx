@@ -282,6 +282,7 @@ export default function ChatPage() {
                   <option value="solve">📝 Solve Problem</option>
                   <option value="notes">📓 Generate Notes</option>
                   <option value="quiz">🎯 Quiz Me</option>
+                  <option value="general">💬 General Chat</option>
                 </select>
               </div>
 
