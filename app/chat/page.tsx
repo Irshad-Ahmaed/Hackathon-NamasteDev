@@ -133,7 +133,7 @@ export default function ChatPage() {
       {/* Header */}
       <header className="flex-none flex items-center justify-between p-4 border-b bg-card text-card-foreground shadow-sm overflow-x-auto">
         <div className="font-bold text-xl flex items-center gap-2 whitespace-nowrap">
-          <span className="text-primary">✦</span> CBSE Tutor
+          <span className="text-primary">✦</span> StudyNotes+
         </div>
         
         <div className="flex items-center gap-4 ml-4">

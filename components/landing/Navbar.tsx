@@ -5,7 +5,7 @@ export function Navbar({ isSignedIn }: { isSignedIn: boolean }) {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-background/60 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-          <span className="text-primary">✦</span> CBSE Tutor
+          <span className="text-primary">✦</span> StudyNotes+
         </div>
         <div className="flex items-center gap-4">
           {isSignedIn ? (

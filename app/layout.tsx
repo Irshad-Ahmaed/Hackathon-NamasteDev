@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CBSE Class 10 AI Tutor",
+  title: "StudyNotes+",
   description: "Personalized AI-powered CBSE Class 10 Study Companion for Math and Science",
 };
 
