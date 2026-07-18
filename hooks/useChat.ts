@@ -47,29 +47,33 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     ]);
 
     let accumulated = '';
+    let activeId = assistantId;
     await readStream('/api/chat', {
       message: text, subject, language, conversationId,
       chapterId, mode: options.mode,
     }, (event) => {
       if (event.type === 'init') {
         setConversationId(event.conversationId);
+        if (event.assistantMessageId) {
+          activeId = event.assistantMessageId;
+        }
         setMessages(prev => prev.map(m =>
           m.id === assistantId
-            ? { ...m, id: event.assistantMessageId || m.id, citations: event.citations as Citation[], outcome: event.outcome }
+            ? { ...m, id: activeId, citations: event.citations as Citation[], outcome: event.outcome }
             : m
         ));
       } else if (event.type === 'token') {
         accumulated += event.content;
         setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, content: accumulated } : m
+          m.id === activeId ? { ...m, content: accumulated } : m
         ));
       } else if (event.type === 'error') {
         setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, content: event.message, streaming: false } : m
+          m.id === activeId ? { ...m, content: event.message, streaming: false } : m
         ));
       } else if (event.type === 'done') {
         setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, streaming: false } : m
+          m.id === activeId ? { ...m, streaming: false } : m
         ));
       }
     });
