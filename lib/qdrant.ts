@@ -3,7 +3,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 let client: QdrantClient | null = null;
 
 export const qdrant = new Proxy({} as QdrantClient, {
-  get(target, prop, receiver) {
+  get(target, prop) {
     if (!client) {
       if (!process.env.QDRANT_URL || !process.env.QDRANT_API_KEY) {
         throw new Error('Qdrant env vars not set');
@@ -13,7 +13,7 @@ export const qdrant = new Proxy({} as QdrantClient, {
         apiKey: process.env.QDRANT_API_KEY,
       });
     }
-    return Reflect.get(client, prop, receiver);
+    return Reflect.get(client, prop);
   }
 });
 

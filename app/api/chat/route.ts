@@ -4,6 +4,7 @@ import { ChatRequestSchema } from '@/lib/schemas';
 import { auth } from '@clerk/nextjs/server';
 import { sql } from '@/lib/db';
 import { AppError } from '@/lib/errors';
+import { enforceRateLimits } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,40 +24,63 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request', details: result.error.flatten() }, { status: 400 });
     }
 
-    const { messages, conversationId } = result.data;
-    // We default to mathematics, but this could be dynamically passed from the client depending on the UI
-    const subject = 'mathematics'; 
+    const requestData = result.data;
 
-    // 3. Resolve user internal UUID and active tenantId from Postgres
-    const userRows = (await sql`
-      SELECT u.id, m.tenant_id 
+    // 3. Resolve internal User UUID and active Tenant ID safely
+    const activeTenantHeader = req.headers.get('x-active-tenant-id');
+
+    const memberships = (await sql`
+      SELECT u.id as user_uuid, u.deletion_requested_at, m.tenant_id, m.is_primary
       FROM users u
       JOIN tenant_memberships m ON u.id = m.user_id
-      WHERE u.clerk_id = ${clerkId} AND m.is_primary = true
-    `) as unknown as Array<{ id: string; tenant_id: string }>;
+      WHERE u.clerk_id = ${clerkId}
+    `) as unknown as Array<{ user_uuid: string; deletion_requested_at: string | null; tenant_id: string; is_primary: boolean }>;
 
-    if (userRows.length === 0) {
-      return NextResponse.json({ error: 'User account not fully provisioned or setup incomplete' }, { status: 409 });
+    if (memberships.length === 0) {
+      return NextResponse.json({
+        error: 'Finishing setup... Please wait a moment and try again.',
+        code: 'SETUP_INCOMPLETE'
+      }, { status: 409 });
     }
 
-    const { id: internalUserId, tenant_id: tenantId } = userRows[0];
+    const firstMembership = memberships[0];
 
-    // 4. Verify user account is not pending DPDP erasure
-    const erasureCheck = (await sql`
-      SELECT 1 FROM users WHERE id = ${internalUserId} AND deletion_requested_at IS NOT NULL
-    `) as unknown as Array<unknown>;
+    if (firstMembership.deletion_requested_at) {
+      return NextResponse.json({ error: 'Account deletion in progress.', code: 'FORBIDDEN' }, { status: 403 });
+    }
 
-    if (erasureCheck.length > 0) {
-      return NextResponse.json({ error: 'Account pending deletion. Access denied.' }, { status: 403 });
+    const internalUserId = firstMembership.user_uuid;
+    let tenantId: string;
+
+    if (activeTenantHeader) {
+      const match = memberships.find(m => m.tenant_id === activeTenantHeader);
+      if (!match) {
+        return NextResponse.json({ error: 'Access denied to selected workspace.', code: 'FORBIDDEN' }, { status: 403 });
+      }
+      tenantId = match.tenant_id;
+    } else {
+      const primary = memberships.find(m => m.is_primary) ?? firstMembership;
+      tenantId = primary.tenant_id;
+    }
+
+    // 4. Rate Limiting
+    const ip = req.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const useReasoning = requestData.mode === 'solve';
+    try {
+      await enforceRateLimits(internalUserId, ip, useReasoning);
+    } catch (rlErr: unknown) {
+      const err = rlErr as Error;
+      if (err.message === 'IP_RATE_LIMIT_EXCEEDED' || err.message === 'USER_DAILY_LIMIT_EXCEEDED' || err.message === 'REASONING_DAILY_LIMIT_EXCEEDED') {
+        return NextResponse.json({ error: 'Rate limit exceeded. Please try again later.' }, { status: 429 });
+      }
+      throw rlErr;
     }
 
     // 5. Execute Chat Pipeline (returns ReadableStream)
     const stream = await executeChatPipeline({
       userId: internalUserId,
       tenantId,
-      conversationId,
-      messages,
-      subject,
+      request: requestData,
     });
 
     // 6. Return stream
@@ -78,3 +102,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+

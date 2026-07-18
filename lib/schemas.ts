@@ -6,13 +6,28 @@ export const ChatMessageSchema = z.object({
 });
 
 export const ChatRequestSchema = z.object({
-  messages: z.array(ChatMessageSchema).min(1, 'At least one message is required'),
-  // We can add optional thread/conversation ID for continuation
+  message: z.string().min(1, 'Question cannot be empty').max(2000, 'Question is too long'),
+  subject: z.enum(['mathematics', 'science']),
+  language: z.enum(['en', 'hi']),
   conversationId: z.string().uuid().optional(),
+  chapterId: z.string().optional(),
+  mode: z.enum(['explain', 'solve', 'notes', 'quiz']),
 });
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+
+// Explicitly reject anything that looks like a system prompt injection.
+export function detectPromptInjection(message: string): boolean {
+  const injectionPatterns = [
+    /ignore previous instructions/i,
+    /you are now/i,
+    /system:/i,
+    /\[INST\]/i,
+    /OPENAI_API_KEY/i,
+  ];
+  return injectionPatterns.some(p => p.test(message));
+}
 
 // P1-012 Stream-Friendly Citation Contract
 export interface CitationMetadata {

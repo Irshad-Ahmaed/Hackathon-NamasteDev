@@ -103,8 +103,10 @@ export class ModeratedStreamBuffer {
          // Redact block
          this.onFlush('\n\n[Content redacted for safety policy violations.]');
          this.buffer = '';
+         throw error;
       } else {
          this.onError(error instanceof Error ? error : new Error(String(error)));
+         throw error;
       }
     }
   }

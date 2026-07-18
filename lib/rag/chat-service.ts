@@ -1,39 +1,31 @@
-import { openai } from '../openai';
-import { checkRateLimit } from '../rate-limit';
+import { openai, models } from '../openai';
 import { moderateInput, ModeratedStreamBuffer, DistressSignalError } from '../moderation';
 import { reformulateQuery } from './reformulate';
 import { retrieveContext, buildCitations } from './retrieval';
 import { buildPrompt } from './prompt';
-import { ChatMessage, CitationMetadata } from '../schemas';
+import { ChatRequest, CitationMetadata, detectPromptInjection } from '../schemas';
 import { saveMessage, fetchHistory, createConversation } from '../../server/conversation-service';
 import { AppError, SAFE_ESCALATION_MESSAGE } from '../errors';
 
 export interface ChatServiceOptions {
   userId: string;
   tenantId: string;
-  conversationId?: string;
-  messages: ChatMessage[];
-  subject: 'mathematics' | 'science';
+  request: ChatRequest;
 }
 
 export async function executeChatPipeline(options: ChatServiceOptions): Promise<ReadableStream> {
-  const { userId, tenantId, subject, messages } = options;
-  let conversationId = options.conversationId;
+  const { userId, tenantId, request } = options;
+  const { message, subject, language, conversationId: reqConversationId, chapterId, mode } = request;
+  let conversationId = reqConversationId;
 
-  // 1. Rate Limit
-  const rateLimitResult = await checkRateLimit(userId);
-  if (!rateLimitResult.success) {
-    throw new AppError('TOO_MANY_REQUESTS', 'Rate limit exceeded. Please try again later.', 429);
-  }
-
-  const latestMessage = messages[messages.length - 1];
-  if (!latestMessage || latestMessage.role !== 'user') {
-    throw new AppError('BAD_REQUEST', 'Last message must be from the user', 400);
+  // 1. Prompt Injection Check
+  if (detectPromptInjection(message)) {
+    throw new AppError('BAD_REQUEST', 'Message contains disallowed content.', 400);
   }
 
   // 2. Input Moderation
   try {
-    await moderateInput(latestMessage.content);
+    await moderateInput(message);
   } catch (error) {
     if (error instanceof DistressSignalError) {
       // Short circuit and return a distress response as stream
@@ -44,19 +36,19 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
   // 3. Resolve Conversation & Save User Message
   if (!conversationId) {
-    conversationId = await createConversation(tenantId, userId, subject);
+    conversationId = await createConversation(tenantId, userId, subject, chapterId);
   }
   
-  await saveMessage(conversationId, 'user', latestMessage.content, userId, tenantId, { subject });
+  await saveMessage(conversationId, 'user', message, userId, tenantId, { subject, chapterId, mode });
 
   // 4. Fetch History
   const history = await fetchHistory(conversationId, userId, tenantId);
 
-  // 5. Reformulate Query
-  const standaloneQuery = await reformulateQuery(history, latestMessage.content);
+  // 5. Reformulate Query (pass the latest user message)
+  const standaloneQuery = await reformulateQuery(history.slice(0, -1), message);
 
-  // 6. Retrieve Context
-  const contextResults = await retrieveContext(standaloneQuery);
+  // 6. Retrieve Context (with filters!)
+  const contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
   const citations = buildCitations(contextResults);
 
   // 7. Evaluate Retrieval Confidence (Basic Thresholding)
@@ -65,7 +57,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
     // Low confidence -> Fallback
     const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
     await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
-      subject, mode: 'explain', outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
+      subject, mode, outcome: 'low_confidence', retrievalTopScore: topScore, retrievedChunkCount: 0 
     });
     return createStaticStream(fallbackText, conversationId, citations, 'refusal');
   }
@@ -74,8 +66,10 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   const promptMessages = buildPrompt(history, standaloneQuery, contextResults);
   const openaiClient = openai;
   
+  const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
+  
   const stream = await openaiClient.chat.completions.create({
-    model: subject === 'mathematics' ? 'gpt-4o' : 'gpt-4o-mini', // Math gets better reasoning
+    model: selectedModel,
     messages: promptMessages,
     stream: true,
   });
@@ -118,7 +112,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
         // 10. Save assistant message after stream completes
         await saveMessage(conversationId!, 'assistant', fullResponse, userId, tenantId, {
-           subject, mode: 'explain', outcome: 'success', retrievalTopScore: topScore, retrievedChunkCount: contextResults.length, model: subject === 'mathematics' ? 'gpt-4o' : 'gpt-4o-mini'
+           subject, mode, outcome: 'success', retrievalTopScore: topScore, retrievedChunkCount: contextResults.length, model: selectedModel
         });
       } catch (err) {
         console.error('Streaming error:', err);
