@@ -79,7 +79,7 @@ export function buildCitations(results: RetrievalResult[]): CitationMetadata[] {
     const meta = res.metadata;
     return {
       pointId: String(meta?.pointId || meta?.id || Math.random().toString(36).substring(7)),
-      sourceUrl: String(meta?.sourceUrl || ''),
+      sourceUrl: String(meta?.sourceUrl || meta?.officialSourceUrl || ''),
       chapterTitle: String(meta?.chapterTitle || 'Unknown Chapter'),
       pages: Array.isArray(meta?.pages) ? meta.pages : [],
       relevanceScore: res.score,

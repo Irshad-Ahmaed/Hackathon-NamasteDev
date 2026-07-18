@@ -44,6 +44,7 @@ export async function saveMessage(
   userId: string,
   tenantId: string,
   metadata?: {
+    id?: string;
     subject?: string;
     chapterId?: string;
     mode?: string;
@@ -63,12 +64,12 @@ export async function saveMessage(
   // This guarantees that even if a developer calls saveMessage elsewhere, the DB enforces access parity.
   const rows = (await sql`
     INSERT INTO messages (
-      conversation_id, role, content, subject, chapter_id, mode, outcome,
+      id, conversation_id, role, content, subject, chapter_id, mode, outcome,
       input_tokens, output_tokens, estimated_cost_usd, retrieval_top_score,
       retrieved_chunk_count, model, encryption_version
     )
     SELECT 
-      ${conversationId}, ${role}, ${encryptedContent}, ${metadata?.subject || null},
+      COALESCE(${metadata?.id || null}::uuid, uuid_generate_v4()), ${conversationId}, ${role}, ${encryptedContent}, ${metadata?.subject || null},
       ${metadata?.chapterId || null}, ${metadata?.mode || null}, ${metadata?.outcome || null},
       ${metadata?.inputTokens || null}, ${metadata?.outputTokens || null},
       ${metadata?.estimatedCostUsd || null}, ${metadata?.retrievalTopScore || null},

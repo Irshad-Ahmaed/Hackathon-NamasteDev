@@ -43,6 +43,7 @@ export interface StreamInitEvent {
   conversationId: string;
   citations: CitationMetadata[];
   outcome: 'success' | 'refusal';
+  assistantMessageId?: string;
 }
 
 export interface StreamTokenEvent {
