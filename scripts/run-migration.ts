@@ -9,8 +9,8 @@
  * DATABASE_URL. Intended for simple DDL migrations without dollar-quoted bodies.
  * The neon HTTP driver runs one statement per call, so we split and run in order.
  */
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
+import { loadEnvConfig } from '@next/env';
+loadEnvConfig(process.cwd());
 
 import fs from 'fs';
 import path from 'path';
