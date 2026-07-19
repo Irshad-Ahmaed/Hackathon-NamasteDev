@@ -171,7 +171,6 @@ export default function ChatPage() {
   const [noteContent, setNoteContent] = useState('');
   const [noteSaveState, setNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'conflict'>('idle');
   const [isAiEditing, setIsAiEditing] = useState(false);
-  const [noteActionSummary, setNoteActionSummary] = useState('');
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
@@ -192,7 +191,6 @@ export default function ChatPage() {
     setNoteDoc(null);
     setNoteContent('');
     setNoteSaveState('idle');
-    setNoteActionSummary('');
   }, [subject, chapterId]);
 
   // Parental consent states
@@ -455,13 +453,19 @@ export default function ChatPage() {
     // If the document has no content yet, first message generates it via the
     // chat generation path. Otherwise, later messages revise it via commands.
     if (!doc.content.trim()) {
-      setNoteActionSummary('Creating notes in the canvas...');
       sendMessage(instruction, {
         mode: 'notes',
         noteDocumentId: doc.documentId,
         onNoteDocumentSaved: (evt) => {
           setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
-          setNoteActionSummary(`Created notes in the canvas and applied your request: ${instruction}`);
+          const summary = `Created notes in the canvas and applied your request: ${instruction}`;
+          // Finalize the streaming notes-summary bubble with the concise summary
+          // instead of leaving the full raw notes markdown in the chat pane.
+          setMessages(prev => prev.map(m =>
+            (m.role === 'assistant' && m.notesSummary && m.streaming)
+              ? { ...m, content: summary, streaming: false }
+              : m
+          ));
           // Pull the authoritative saved content into the controlled canvas so
           // it persists after the transient chat stream ends.
           void reloadNoteDocument(evt.documentId);
@@ -473,7 +477,6 @@ export default function ChatPage() {
     // Revise the active document through the server-authoritative command endpoint.
     const messageId = generateNoteId();
     const summary = 'Applying your request to the notes canvas...';
-    setNoteActionSummary(summary);
     setMessages(prev => [
       ...prev,
       { id: `user-${messageId}`, role: 'user', content: instruction },
@@ -493,7 +496,6 @@ export default function ChatPage() {
       });
       if (res.status === 409) {
         setNoteSaveState('conflict');
-        setNoteActionSummary('The notes changed elsewhere, so your request was not applied.');
         setMessages(prev => prev.map(message => message.id === summaryMessageId
           ? { ...message, content: 'The notes changed elsewhere, so this request was not applied.' }
           : message));
@@ -501,7 +503,6 @@ export default function ChatPage() {
       }
       if (!res.ok || !res.body) {
         alert('The edit could not be applied. Please try again.');
-        setNoteActionSummary('The request could not be applied to the notes canvas.');
         setMessages(prev => prev.map(message => message.id === summaryMessageId
           ? { ...message, content: 'The request could not be applied to the notes canvas.' }
           : message));
@@ -531,7 +532,6 @@ export default function ChatPage() {
               saved = true;
               setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
               const summary = `Applied your request to the notes canvas: ${instruction}`;
-              setNoteActionSummary(summary);
               setMessages(prev => prev.map(message => message.id === summaryMessageId
                 ? { ...message, content: summary }
                 : message));
@@ -543,7 +543,6 @@ export default function ChatPage() {
         // Stream ended without a persistence event: keep prior saved content.
         await reloadNoteDocument(documentId);
         const summary = 'The request could not be confirmed as saved to the notes canvas.';
-        setNoteActionSummary(summary);
         setMessages(prev => prev.map(message => message.id === summaryMessageId
           ? { ...message, content: summary }
           : message));
@@ -552,7 +551,6 @@ export default function ChatPage() {
       }
     } catch {
       await reloadNoteDocument(documentId);
-      setNoteActionSummary('The request could not be applied to the notes canvas.');
       setMessages(prev => prev.map(message => message.id === summaryMessageId
         ? { ...message, content: 'The request could not be applied to the notes canvas.' }
         : message));
@@ -710,8 +708,8 @@ export default function ChatPage() {
             messages.map((msg) => (
               <ChatMessage
                 key={msg.id}
-                message={mode === 'notes' && msg.role === 'assistant' && msg.notesSummary
-                  ? { ...msg, content: msg.streaming ? 'Updating the notes canvas...' : (noteActionSummary || 'Notes were updated in the canvas.') }
+                message={msg.role === 'assistant' && msg.notesSummary && msg.streaming
+                  ? { ...msg, content: 'Updating the notes canvas...' }
                   : msg}
                 onFeedback={handleFeedback}
                 feedbackStatus={feedbackStatus[msg.id]}
