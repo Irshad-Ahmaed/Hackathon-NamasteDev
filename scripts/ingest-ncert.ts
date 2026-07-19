@@ -145,7 +145,7 @@ async function main() {
 
     // 3. Chunk the chapter
     console.log('Chunking text into overlapping segments...');
-    const baseTitle = path.basename(resolvedPath, '.pdf');
+    const baseTitle = path.basename(resolvedPath).replace(/\.pdf$/i, '');
     const chunks = chunkChapter(pages);
     console.log(`Created ${chunks.length} overlapping chunks.`);
 
