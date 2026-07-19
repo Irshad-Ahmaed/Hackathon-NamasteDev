@@ -166,6 +166,12 @@ export default function ChatPage() {
   const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
   const [availableChapters, setAvailableChapters] = useState<{ mathematics: number[], science: number[] }>({ mathematics: [], science: [] });
 
+  // --- Interactive notes document state (owned by the page) ---
+  const [noteDoc, setNoteDoc] = useState<{ documentId: string; revision: number } | null>(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSaveState, setNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'conflict'>('idle');
+  const [isAiEditing, setIsAiEditing] = useState(false);
+
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -176,6 +182,15 @@ export default function ChatPage() {
       setIsSidebarOpen(window.innerWidth >= 768);
     });
   }, []);
+
+  // Reset the active notes document when the subject or chapter changes so one
+  // chapter's document never bleeds into another.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNoteDoc(null);
+    setNoteContent('');
+    setNoteSaveState('idle');
+  }, [subject, chapterId]);
 
   // Parental consent states
   const [consentState, setConsentState] = useState<'pending' | 'given' | 'loading'>('loading');
@@ -372,21 +387,192 @@ export default function ChatPage() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (streaming || !inputText.trim()) return;
+    if (streaming || isAiEditing || !inputText.trim()) return;
 
-    // If asking for notes, open the canvas and let the chat display it there
-    if (mode === 'notes') {
-      setIsNotesOpen(true);
+    if (mode !== 'notes') {
+      sendMessage(inputText, { mode });
+      setInputText('');
+      return;
     }
 
-    sendMessage(inputText, { mode });
+    // --- Generate Notes mode: the input controls the active document ---
+    void handleNotesSend(inputText);
     setInputText('');
+  };
+
+  // Ensure the private document exists for the current subject/chapter, returning it.
+  const ensureNoteDocument = React.useCallback(async (): Promise<{ documentId: string; revision: number; content: string } | null> => {
+    const chapNum = chapterId ? parseInt(chapterId, 10) : NaN;
+    if (isNaN(chapNum)) {
+      alert('Please select a specific chapter before generating notes.');
+      return null;
+    }
+    if (noteDoc) return { ...noteDoc, content: noteContent };
+
+    const res = await fetch('/api/note-documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, chapterNumber: chapNum, language: 'en' }),
+    });
+    if (!res.ok) {
+      alert('Could not open your notes document. Please try again.');
+      return null;
+    }
+    const data = await res.json();
+    const doc = { documentId: data.documentId, revision: data.revision };
+    setNoteDoc(doc);
+    setNoteContent(data.content || '');
+    return { ...doc, content: data.content || '' };
+  }, [chapterId, subject, noteDoc, noteContent]);
+
+  const handleNotesSend = async (instruction: string) => {
+    setIsNotesOpen(true);
+    const doc = await ensureNoteDocument();
+    if (!doc) return;
+
+    // If the document has no content yet, first message generates it via the
+    // chat generation path. Otherwise, later messages revise it via commands.
+    if (!doc.content.trim()) {
+      sendMessage(instruction, {
+        mode: 'notes',
+        noteDocumentId: doc.documentId,
+        onNoteDocumentSaved: (evt) => {
+          setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+          // Pull the authoritative saved content into the controlled canvas so
+          // it persists after the transient chat stream ends.
+          void reloadNoteDocument(evt.documentId);
+        },
+      });
+      return;
+    }
+
+    // Revise the active document through the server-authoritative command endpoint.
+    await runNoteCommand(doc.documentId, doc.revision, instruction);
+  };
+
+  const runNoteCommand = async (documentId: string, expectedRevision: number, instruction: string) => {
+    setIsAiEditing(true);
+    setNoteSaveState('idle');
+    try {
+      const res = await fetch(`/api/note-documents/${documentId}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction, expectedRevision }),
+      });
+      if (res.status === 409) {
+        setNoteSaveState('conflict');
+        return;
+      }
+      if (!res.ok || !res.body) {
+        alert('The edit could not be applied. Please try again.');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let saved = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.type === 'token') {
+              accumulated += evt.content;
+              setNoteContent(accumulated); // temporary preview
+            } else if (evt.type === 'note_document_saved') {
+              saved = true;
+              setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+            }
+          } catch { /* ignore malformed */ }
+        }
+      }
+      if (!saved) {
+        // Stream ended without a persistence event: keep prior saved content.
+        await reloadNoteDocument(documentId);
+      }
+    } catch {
+      await reloadNoteDocument(documentId);
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
+
+  const reloadNoteDocument = async (documentId: string) => {
+    const res = await fetch(`/api/note-documents/${documentId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setNoteDoc({ documentId: data.documentId, revision: data.revision });
+      setNoteContent(data.content || '');
+    }
+  };
+
+  const handleNoteSave = async () => {
+    if (!noteDoc) return;
+    setNoteSaveState('saving');
+    try {
+      const res = await fetch(`/api/note-documents/${noteDoc.documentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: noteContent, expectedRevision: noteDoc.revision }),
+      });
+      if (res.status === 409) {
+        setNoteSaveState('conflict');
+        return;
+      }
+      if (!res.ok) {
+        setNoteSaveState('idle');
+        alert('Save failed. Please try again.');
+        return;
+      }
+      const data = await res.json();
+      setNoteDoc({ documentId: data.documentId, revision: data.revision });
+      setNoteContent(data.content);
+      setNoteSaveState('saved');
+      setTimeout(() => setNoteSaveState('idle'), 2000);
+    } catch {
+      setNoteSaveState('idle');
+      alert('Network error while saving.');
+    }
+  };
+
+  const handleNoteUndo = async () => {
+    if (!noteDoc) return;
+    setIsAiEditing(true);
+    try {
+      const res = await fetch(`/api/note-documents/${noteDoc.documentId}/undo`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setNoteDoc({ documentId: data.documentId, revision: data.revision });
+        setNoteContent(data.content);
+      }
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
+
+  const handleConflictReload = () => {
+    if (noteDoc) void reloadNoteDocument(noteDoc.documentId);
+    setNoteSaveState('idle');
+  };
+  const handleConflictCopyMine = () => {
+    navigator.clipboard.writeText(noteContent);
+    setNoteSaveState('idle');
   };
 
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
 
-  // Derive notes content only when in 'notes' mode — avoids showing quiz/explain answers in the Notes Canvas.
-  // We walk backwards to find the most recent assistant message that was generated in notes mode.
+  // While notes are being generated (first message / regenerate), the stream
+  // lands in the chat assistant message; mirror it into the canvas preview.
+  // Otherwise the canvas is controlled by the page's noteContent state.
+  const isGeneratingNotes = !!(streaming && mode === 'notes');
   let lastNotesAssistant: Message | undefined;
   if (mode === 'notes') {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -396,10 +582,9 @@ export default function ChatPage() {
       }
     }
   }
-
-  const derivedNotesContent = activeMessage && mode === 'notes'
-    ? activeMessage.content
-    : (lastNotesAssistant ? lastNotesAssistant.content : '');
+  const canvasContent = isGeneratingNotes
+    ? (activeMessage?.content ?? lastNotesAssistant?.content ?? noteContent)
+    : noteContent;
 
   return (
     <div className="flex flex-row h-screen bg-background relative overflow-hidden w-full">
@@ -572,6 +757,16 @@ export default function ChatPage() {
                   <option value="quiz">🎯 Quiz Me</option>
                   <option value="general">💬 General Chat</option>
                 </select>
+
+                {/* Generate Notes target chip */}
+                {mode === 'notes' && (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-medium text-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block" />
+                    {chapterId
+                      ? `Editing: ${subject === 'mathematics' ? 'Mathematics' : 'Science'}, ${CHAPTER_NAMES[subject][parseInt(chapterId, 10)] || `Chapter ${chapterId}`}`
+                      : 'Select a chapter to edit notes'}
+                  </span>
+                )}
               </div>
 
               <div className="font-mono text-[10px] opacity-60">
@@ -586,8 +781,17 @@ export default function ChatPage() {
       <NotesCanvas
         isOpen={isNotesOpen}
         onClose={() => setIsNotesOpen(false)}
-        content={derivedNotesContent}
-        isGenerating={streaming && mode === 'notes'}
+        content={canvasContent}
+        documentId={noteDoc?.documentId ?? null}
+        revision={noteDoc?.revision ?? null}
+        onContentChange={setNoteContent}
+        onSave={handleNoteSave}
+        onUndo={handleNoteUndo}
+        isGenerating={isGeneratingNotes}
+        isAiEditing={isAiEditing}
+        saveState={noteSaveState}
+        onReloadConflict={handleConflictReload}
+        onCopyMyChanges={handleConflictCopyMine}
         subject={subject}
         chapterId={chapterId}
       />

@@ -22,7 +22,11 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
 
   const sendMessage = useCallback(async (
     text: string,
-    options: { mode: string }
+    options: {
+      mode: string;
+      noteDocumentId?: string;
+      onNoteDocumentSaved?: (evt: { documentId: string; revision: number; operation: 'generate' | 'regenerate' | 'command'; citations: Citation[] }) => void;
+    }
   ) => {
     if (!text.trim() || streaming) return; // no-op if already streaming
 
@@ -45,7 +49,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     let activeId = assistantId;
     await readStream('/api/chat', {
       message: text, subject, language, conversationId,
-      chapterId, mode: options.mode,
+      chapterId, mode: options.mode, noteDocumentId: options.noteDocumentId,
     }, (event) => {
       if (event.type === 'init') {
         setConversationId(event.conversationId);
@@ -62,11 +66,20 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, content: accumulated } : m
         ));
+      } else if (event.type === 'note_document_saved') {
+        // Persistence signal: only now is the document revision authoritative.
+        options.onNoteDocumentSaved?.({
+          documentId: event.documentId,
+          revision: event.revision,
+          operation: event.operation,
+          citations: (event.citations as Citation[]) ?? [],
+        });
       } else if (event.type === 'error') {
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, content: event.message, streaming: false } : m
         ));
       } else if (event.type === 'done') {
+        // Transport-level completion only; not a persistence signal.
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, streaming: false } : m
         ));
