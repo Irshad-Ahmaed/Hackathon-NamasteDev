@@ -101,6 +101,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Missing conversationId or valid title' }, { status: 400 });
     }
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(conversationId)) {
+      return NextResponse.json({ error: 'Invalid conversationId format' }, { status: 400 });
+    }
+
     // Resolve internal User UUID
     const userResult = (await sql`
       SELECT id FROM users WHERE clerk_id = ${clerkId} AND deletion_requested_at IS NULL
@@ -156,6 +161,11 @@ export async function DELETE(req: NextRequest) {
 
     if (!conversationId) {
       return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 });
+    }
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(conversationId)) {
+      return NextResponse.json({ error: 'Invalid conversationId format' }, { status: 400 });
     }
 
     // Resolve internal User UUID

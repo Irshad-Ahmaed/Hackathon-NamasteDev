@@ -113,7 +113,7 @@ describe('Feedback API - POST Submission', () => {
     vi.clearAllMocks();
   });
 
-  test('should return 409 when feedback already submitted for same message+user+type', async () => {
+  test('should treat repeated feedback submissions as idempotent success', async () => {
     vi.mocked(auth).mockResolvedValue({ userId: 'user_student' } as any);
     vi.mocked(sql).mockImplementation((async (strings: TemplateStringsArray) => {
       if (strings[0].includes('FROM users')) {
@@ -123,8 +123,7 @@ describe('Feedback API - POST Submission', () => {
         // message ownership check
         return [{ id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d' }];
       }
-      if (strings[0].includes('FROM feedback')) {
-        // Simulates feedback already existing with same type to trigger 409
+      if (strings[0].includes('INSERT INTO feedback')) {
         return [{ id: 'existing_feedback_1', type: 'helpful' }];
       }
       return [];
@@ -137,8 +136,8 @@ describe('Feedback API - POST Submission', () => {
     });
 
     const response = await POST(mockReq);
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.error).toBe('Feedback already submitted for this message');
+    expect(data).toEqual({ success: true, message: 'Feedback saved successfully' });
   });
 });

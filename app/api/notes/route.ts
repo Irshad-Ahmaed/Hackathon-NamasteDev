@@ -143,3 +143,46 @@ Format as markdown. Maximum 1200 words.`;
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Resolve internal User UUID
+    const userResult = (await sql`
+      SELECT id FROM users WHERE clerk_id = ${clerkId} AND deletion_requested_at IS NULL
+    `) as unknown as Array<{ id: string }>;
+
+    if (userResult.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const { subject, chapterNumber, content, language = 'en' } = await req.json();
+
+    if (!subject || typeof chapterNumber !== 'number' || typeof content !== 'string') {
+      return NextResponse.json({ error: 'Missing subject, chapterNumber or content' }, { status: 400 });
+    }
+
+    if (subject !== 'mathematics' && subject !== 'science') {
+      return NextResponse.json({ error: 'Invalid subject' }, { status: 400 });
+    }
+
+    // Upsert the note as a draft
+    await sql`
+      INSERT INTO notes (subject, chapter_number, chapter_title, language, content, prompt_version, status)
+      VALUES (${subject}, ${chapterNumber}, 'User Edited Notes', ${language}, ${content}, 'user-edit', 'draft')
+      ON CONFLICT (subject, chapter_number, language, status) 
+      DO UPDATE SET 
+        content = EXCLUDED.content,
+        generated_at = now()
+    `;
+
+    return NextResponse.json({ success: true, message: 'Notes saved successfully' });
+  } catch (error) {
+    console.error('[POST /api/notes] Error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

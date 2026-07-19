@@ -56,35 +56,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message not found or access denied' }, { status: 404 });
     }
 
-    // Check if feedback already exists for this message and user to prevent duplicates
-    const existing = (await sql`
-      SELECT id, type FROM feedback 
-      WHERE message_id = ${messageId} AND user_id = ${userId}
-    `) as unknown as Array<{ id: string; type: string }>;
-
-    if (existing.length > 0) {
-      const match = existing[0];
-      if (match.type === type) {
-        return NextResponse.json({ error: 'Feedback already submitted for this message' }, { status: 409 });
-      }
-
-      await sql`
-        UPDATE feedback 
-        SET type = ${type}, reported_at = now()
-        WHERE id = ${match.id}
-      `;
-      logger.info({ event: 'feedback_updated', clerkIdHash, messageId, type });
-      return NextResponse.json({ success: true, message: 'Feedback updated successfully' });
-    }
-
-    await sql`
+    // A single upsert keeps the one-feedback-per-message invariant intact under concurrent requests.
+    const result = (await sql`
       INSERT INTO feedback (message_id, user_id, type)
       VALUES (${messageId}, ${userId}, ${type})
-    `;
+      ON CONFLICT (message_id, user_id)
+      DO UPDATE SET
+        type = EXCLUDED.type,
+        reported_at = now()
+      RETURNING id, type
+    `) as unknown as Array<{ id: string; type: string }>;
 
-    logger.info({ event: 'feedback_submitted', clerkIdHash, messageId, type });
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'Unable to save feedback' }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true, message: 'Feedback submitted successfully' });
+    logger.info({ event: 'feedback_upserted', clerkIdHash, messageId, type });
+    return NextResponse.json({ success: true, message: 'Feedback saved successfully' });
   } catch (error) {
     console.error('[POST /api/feedback] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
