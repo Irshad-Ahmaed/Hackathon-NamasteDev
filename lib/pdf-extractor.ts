@@ -8,29 +8,33 @@ export type ExtractedPage = {
 };
 
 export async function extractPdf(pdfBuffer: Buffer): Promise<ExtractedPage[]> {
-  const parser = new PDFParse(new Uint8Array(pdfBuffer));
-  const result = await parser.getText();
+  const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
+  try {
+    const result = await parser.getText();
 
-  const pages: ExtractedPage[] = result.pages.map((p) => {
-    const text = cleanText(p.text);
-    return {
-      pageNumber: p.num,
-      text,
-      isImageHeavy: text.replace(/\s/g, '').length < 100,
-    };
-  });
-
-  // For image-heavy pages: log warning
-  const imageHeavy = pages.filter(p => p.isImageHeavy);
-  if (imageHeavy.length > 0) {
-    logger.warn({ 
-      event: 'pdf_extraction_image_heavy_detected', 
-      count: imageHeavy.length,
-      pages: imageHeavy.map(p => p.pageNumber)
+    const pages: ExtractedPage[] = result.pages.map((p) => {
+      const text = cleanText(p.text);
+      return {
+        pageNumber: p.num,
+        text,
+        isImageHeavy: text.replace(/\s/g, '').length < 100,
+      };
     });
-  }
 
-  return pages;
+    // For image-heavy pages: log warning
+    const imageHeavy = pages.filter(p => p.isImageHeavy);
+    if (imageHeavy.length > 0) {
+      logger.warn({ 
+        event: 'pdf_extraction_image_heavy_detected', 
+        count: imageHeavy.length,
+        pages: imageHeavy.map(p => p.pageNumber)
+      });
+    }
+
+    return pages;
+  } finally {
+    await parser.destroy();
+  }
 }
 
 function cleanText(raw: string): string {

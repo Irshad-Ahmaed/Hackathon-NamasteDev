@@ -18,8 +18,14 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Missing svix headers' }, { status: 400 });
   }
 
+  const secret = process.env.CLERK_WEBHOOK_SECRET;
+  if (!secret) {
+    logger.error('Missing CLERK_WEBHOOK_SECRET environment variable');
+    return Response.json({ error: 'Server configuration error' }, { status: 500 });
+  }
+
   const body = await req.text();
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+  const wh = new Webhook(secret);
 
   let event: { type: string; data: { id: string; email_addresses?: Array<{ email_address: string }>; [key: string]: unknown } };
   try {

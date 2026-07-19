@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
     }
 
-    logger.info({ event: 'consent_given', clerkIdHash, parentEmail });
+    logger.info({ event: 'consent_given', clerkIdHash });
 
     return NextResponse.json({ 
       success: true, 

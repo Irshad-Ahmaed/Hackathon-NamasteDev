@@ -50,6 +50,7 @@ export function useStream() {
           try { onEvent(JSON.parse(raw) as StreamEvent); } catch { /* skip malformed */ }
         }
       }
+      setStreaming(false);
       onEvent({ type: 'done' });
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== 'AbortError') {

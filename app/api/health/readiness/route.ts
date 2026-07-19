@@ -3,10 +3,7 @@ import { sql } from '@/lib/db';
 import { Redis } from '@upstash/redis';
 import { qdrant } from '@/lib/qdrant';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+
 
 export async function GET(req: NextRequest) {
   const secretHeader = req.headers.get('x-monitor-secret');
@@ -33,6 +30,10 @@ export async function GET(req: NextRequest) {
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
       checks.redis = 'skipped (not configured)';
     } else {
+      const redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      });
       await redis.ping();
       checks.redis = 'ok';
     }
