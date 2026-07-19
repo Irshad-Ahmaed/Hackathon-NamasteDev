@@ -4,6 +4,13 @@ StudyNotes+ is an AI-powered CBSE Class 10 study assistant for Mathematics and S
 
 The application is designed for Indian students and uses a tenant-aware data model so a student's notes and conversations remain isolated within the active workspace.
 
+## Demo Video
+
+A 3-minute walkthrough of StudyNotes+ — NCERT-grounded chat, the side-by-side notes canvas, and safe AI editing:
+
+<video src="/walkthrough.mp4" controls width="100%"></video>
+
+
 ## Product Capabilities
 
 - NCERT-grounded explanations and problem solving for Class 10 Mathematics and Science.
