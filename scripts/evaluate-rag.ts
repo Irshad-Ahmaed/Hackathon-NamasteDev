@@ -80,18 +80,30 @@ async function main() {
 
   // Scroll Qdrant to find which chapters actually have ingested chunks
   console.log('Scanning Qdrant to detect ingested chapters...');
-  const scrollResult = await qdrant.scroll(targetCollection, {
-    limit: 10000,
-    with_payload: ['subject', 'chapterNumber']
-  });
-
   const ingestedChapters = new Set<string>();
-  for (const point of scrollResult.points) {
-    const payload = point.payload as ChunkPayload | undefined;
-    if (payload?.subject && payload?.chapterNumber) {
-      ingestedChapters.add(`${payload.subject}-${payload.chapterNumber}`);
+  let offset: string | number | undefined = undefined;
+
+  do {
+    const scrollResult = await qdrant.scroll(targetCollection, {
+      limit: 1000,
+      with_payload: ['subject', 'chapterNumber'],
+      offset
+    });
+
+    for (const point of scrollResult.points) {
+      const payload = point.payload as ChunkPayload | undefined;
+      if (payload?.subject && payload?.chapterNumber) {
+        ingestedChapters.add(`${payload.subject}-${payload.chapterNumber}`);
+      }
     }
-  }
+
+    const nextOffset = scrollResult.next_page_offset;
+    if (typeof nextOffset === 'string' || typeof nextOffset === 'number') {
+      offset = nextOffset;
+    } else {
+      offset = undefined;
+    }
+  } while (offset !== undefined);
 
   console.log(`Ingested chapters detected in Qdrant:`, Array.from(ingestedChapters));
 

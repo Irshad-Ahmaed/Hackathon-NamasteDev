@@ -59,10 +59,13 @@ export async function retrieveContext(
   }
 
   if (filters?.chapterId) {
-    must.push({
-      key: 'chapterNumber',
-      match: { value: parseInt(filters.chapterId, 10) }
-    });
+    const chapterNum = parseInt(filters.chapterId, 10);
+    if (!isNaN(chapterNum)) {
+      must.push({
+        key: 'chapterNumber',
+        match: { value: chapterNum }
+      });
+    }
   }
 
   const searchResults = await withRetry(() =>

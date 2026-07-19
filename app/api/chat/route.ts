@@ -71,7 +71,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Rate Limiting
-    const ip = req.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    // Take the first IP only — x-forwarded-for may be comma-separated (e.g. "1.2.3.4, 10.0.0.1")
+    const rawIp = req.headers.get('x-forwarded-for') ?? '127.0.0.1';
+    const ip = rawIp.split(',')[0].trim();
     const useReasoning = requestData.mode === 'solve';
     try {
       await enforceRateLimits(internalUserId, ip, useReasoning);
@@ -107,7 +109,8 @@ export async function POST(req: NextRequest) {
     
     const durationMs = Date.now() - startTime;
     const statusCode = error instanceof AppError ? error.statusCode : 500;
-    const outcome = (error as { code?: string })?.code === 'MODERATION_BLOCKED' ? 'blocked' : 'error';
+    const isModerationBlocked = error instanceof AppError && error.code === 'MODERATION_BLOCKED';
+    const outcome = isModerationBlocked ? 'blocked' : 'error';
     const userIdHash = internalUserId ? crypto.createHash('sha256').update(internalUserId).digest('hex') : 'anonymous';
 
     logger.error({
@@ -124,9 +127,11 @@ export async function POST(req: NextRequest) {
     }, 'chat_request_complete');
 
     try {
+      // Use correct event_type: 'chat_message_blocked' for moderation, 'chat_message_failed' for other errors
+      const eventType = isModerationBlocked ? 'chat_message_blocked' : 'chat_message_failed';
       await sql`
         INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
-        VALUES (${userIdHash}, 'chat_message_blocked', ${requestData?.subject || null}, ${requestData?.chapterId || null}, ${requestData?.mode || null}, ${outcome}, ${durationMs}, 0)
+        VALUES (${userIdHash}, ${eventType}, ${requestData?.subject || null}, ${requestData?.chapterId || null}, ${requestData?.mode || null}, ${outcome}, ${durationMs}, 0)
       `;
     } catch (dbErr) {
       console.error('Failed to log event to DB on route error:', dbErr);
