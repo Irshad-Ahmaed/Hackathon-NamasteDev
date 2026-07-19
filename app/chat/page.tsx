@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 import { createMathPlugin } from '@streamdown/math';
 import 'katex/dist/katex.min.css';
@@ -171,11 +171,13 @@ export default function ChatPage() {
   const [noteContent, setNoteContent] = useState('');
   const [noteSaveState, setNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'conflict'>('idle');
   const [isAiEditing, setIsAiEditing] = useState(false);
+  const [noteActionSummary, setNoteActionSummary] = useState('');
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const chatViewportRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -190,6 +192,7 @@ export default function ChatPage() {
     setNoteDoc(null);
     setNoteContent('');
     setNoteSaveState('idle');
+    setNoteActionSummary('');
   }, [subject, chapterId]);
 
   // Parental consent states
@@ -251,6 +254,18 @@ export default function ChatPage() {
       });
     }
   }, [conversationId, loadConversationsList]);
+
+  // Open conversations at the newest message and keep the viewport at the
+  // bottom while a response is streaming. The frame waits for the message DOM
+  // to finish rendering before measuring scrollHeight.
+  useEffect(() => {
+    if (loadingHistory || messages.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = chatViewportRef.current;
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, loadingHistory]);
 
   const selectConversation = async (convo: ConversationItem) => {
     try {
@@ -400,6 +415,13 @@ export default function ChatPage() {
     setInputText('');
   };
 
+  // Stable id generator for transient note-action messages (crypto UUID when available).
+  const generateNoteId = React.useCallback((): string => {
+    return typeof window !== 'undefined' && window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `note-${Date.now().toString(36)}`;
+  }, []);
+
   // Ensure the private document exists for the current subject/chapter, returning it.
   const ensureNoteDocument = React.useCallback(async (): Promise<{ documentId: string; revision: number; content: string } | null> => {
     const chapNum = chapterId ? parseInt(chapterId, 10) : NaN;
@@ -433,11 +455,13 @@ export default function ChatPage() {
     // If the document has no content yet, first message generates it via the
     // chat generation path. Otherwise, later messages revise it via commands.
     if (!doc.content.trim()) {
+      setNoteActionSummary('Creating notes in the canvas...');
       sendMessage(instruction, {
         mode: 'notes',
         noteDocumentId: doc.documentId,
         onNoteDocumentSaved: (evt) => {
           setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+          setNoteActionSummary(`Created notes in the canvas and applied your request: ${instruction}`);
           // Pull the authoritative saved content into the controlled canvas so
           // it persists after the transient chat stream ends.
           void reloadNoteDocument(evt.documentId);
@@ -447,10 +471,18 @@ export default function ChatPage() {
     }
 
     // Revise the active document through the server-authoritative command endpoint.
-    await runNoteCommand(doc.documentId, doc.revision, instruction);
+    const messageId = generateNoteId();
+    const summary = 'Applying your request to the notes canvas...';
+    setNoteActionSummary(summary);
+    setMessages(prev => [
+      ...prev,
+      { id: `user-${messageId}`, role: 'user', content: instruction },
+      { id: messageId, role: 'assistant', content: summary, notesSummary: true },
+    ]);
+    await runNoteCommand(doc.documentId, doc.revision, instruction, messageId);
   };
 
-  const runNoteCommand = async (documentId: string, expectedRevision: number, instruction: string) => {
+  const runNoteCommand = async (documentId: string, expectedRevision: number, instruction: string, summaryMessageId: string) => {
     setIsAiEditing(true);
     setNoteSaveState('idle');
     try {
@@ -461,16 +493,23 @@ export default function ChatPage() {
       });
       if (res.status === 409) {
         setNoteSaveState('conflict');
+        setNoteActionSummary('The notes changed elsewhere, so your request was not applied.');
+        setMessages(prev => prev.map(message => message.id === summaryMessageId
+          ? { ...message, content: 'The notes changed elsewhere, so this request was not applied.' }
+          : message));
         return;
       }
       if (!res.ok || !res.body) {
         alert('The edit could not be applied. Please try again.');
+        setNoteActionSummary('The request could not be applied to the notes canvas.');
+        setMessages(prev => prev.map(message => message.id === summaryMessageId
+          ? { ...message, content: 'The request could not be applied to the notes canvas.' }
+          : message));
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let accumulated = '';
       let saved = false;
       while (true) {
         const { done, value } = await reader.read();
@@ -485,11 +524,17 @@ export default function ChatPage() {
           try {
             const evt = JSON.parse(raw);
             if (evt.type === 'token') {
-              accumulated += evt.content;
-              setNoteContent(accumulated); // temporary preview
+              // Keep the current document visible while the server applies the
+              // command. Replacing it token-by-token makes a small formatting
+              // change look like the whole note was rewritten.
             } else if (evt.type === 'note_document_saved') {
               saved = true;
               setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+              const summary = `Applied your request to the notes canvas: ${instruction}`;
+              setNoteActionSummary(summary);
+              setMessages(prev => prev.map(message => message.id === summaryMessageId
+                ? { ...message, content: summary }
+                : message));
             }
           } catch { /* ignore malformed */ }
         }
@@ -497,9 +542,20 @@ export default function ChatPage() {
       if (!saved) {
         // Stream ended without a persistence event: keep prior saved content.
         await reloadNoteDocument(documentId);
+        const summary = 'The request could not be confirmed as saved to the notes canvas.';
+        setNoteActionSummary(summary);
+        setMessages(prev => prev.map(message => message.id === summaryMessageId
+          ? { ...message, content: summary }
+          : message));
+      } else {
+        await reloadNoteDocument(documentId);
       }
     } catch {
       await reloadNoteDocument(documentId);
+      setNoteActionSummary('The request could not be applied to the notes canvas.');
+      setMessages(prev => prev.map(message => message.id === summaryMessageId
+        ? { ...message, content: 'The request could not be applied to the notes canvas.' }
+        : message));
     } finally {
       setIsAiEditing(false);
     }
@@ -627,11 +683,16 @@ export default function ChatPage() {
       )}
 
       {/* Main Chat Area Wrapper */}
-      <div className={`flex-1 flex flex-col relative overflow-hidden z-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] shadow-2xl transition-all duration-300 m-4 md:my-6 md:mr-6 ${
+      <div className={`flex flex-col relative overflow-hidden z-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] shadow-2xl transition-all duration-300 m-4 md:my-6 min-w-0 ${
         isSidebarOpen ? 'md:ml-3' : 'md:ml-6'
+      } ${
+        // When the notes canvas is open, split the content area at lg: chat and
+        // canvas each take half of the space beside the sidebar. Below lg the
+        // canvas overlays the chat instead of splitting it.
+        isNotesOpen ? 'flex-1 md:mr-3' : 'flex-1 md:mr-6'
       }`}>
         {/* Main Chat Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10 no-scrollbar">
+        <main ref={chatViewportRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10 no-scrollbar">
           {loadingHistory ? (
             <div className="m-auto flex flex-col items-center justify-center space-y-2 opacity-60">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -649,7 +710,9 @@ export default function ChatPage() {
             messages.map((msg) => (
               <ChatMessage
                 key={msg.id}
-                message={msg}
+                message={mode === 'notes' && msg.role === 'assistant' && msg.notesSummary
+                  ? { ...msg, content: msg.streaming ? 'Updating the notes canvas...' : (noteActionSummary || 'Notes were updated in the canvas.') }
+                  : msg}
                 onFeedback={handleFeedback}
                 feedbackStatus={feedbackStatus[msg.id]}
               />
@@ -776,8 +839,9 @@ export default function ChatPage() {
           </form>
         </div>
       </footer>
+      </div>
 
-      {/* Notes Canvas Overlay */}
+      {/* Notes Canvas — inline split panel on lg, overlay below lg */}
       <NotesCanvas
         isOpen={isNotesOpen}
         onClose={() => setIsNotesOpen(false)}
@@ -795,7 +859,6 @@ export default function ChatPage() {
         subject={subject}
         chapterId={chapterId}
       />
-      </div>
 
       {/* Parental Consent Overlay Modal */}
       {consentState === 'pending' && (
@@ -848,4 +911,3 @@ export default function ChatPage() {
     </div>
   );
 }
-

@@ -73,6 +73,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
       subject,
       language,
       chapterId,
+      instruction: message,
       requestId,
       startTime,
     });
@@ -310,6 +311,7 @@ interface NotesGenerationOptions {
   subject: 'mathematics' | 'science';
   language: 'en' | 'hi';
   chapterId?: string;
+  instruction: string;
   requestId: string;
   startTime: number;
 }
@@ -321,7 +323,7 @@ interface NotesGenerationOptions {
  * never emit that event, leaving the saved document intact.
  */
 async function executeNotesGeneration(options: NotesGenerationOptions): Promise<ReadableStream> {
-  const { userId, tenantId, conversationId, noteDocumentId, subject, language, chapterId, requestId, startTime } = options;
+  const { userId, tenantId, conversationId, noteDocumentId, subject, language, chapterId, instruction, requestId, startTime } = options;
 
   // Ownership-scoped load of the private document (throws 404 if not owned).
   const doc = await loadDocumentById(noteDocumentId, userId, tenantId);
@@ -351,7 +353,7 @@ async function executeNotesGeneration(options: NotesGenerationOptions): Promise<
     return createStaticStream(msg, conversationId, [], 'refusal', assistantMessageId);
   }
 
-  const stream = await streamNotesGeneration(doc.subject, chapterNumber, ctx.chapterTitle, ctx.chapterText);
+  const stream = await streamNotesGeneration(doc.subject, chapterNumber, ctx.chapterTitle, ctx.chapterText, instruction);
 
   let cancelled = false;
   return new ReadableStream({
@@ -409,7 +411,8 @@ async function executeNotesGeneration(options: NotesGenerationOptions): Promise<
         const finalCompletionTokens = completionTokens || Math.ceil(fullResponse.length / 4);
         const finalCost = estimateCostUsd(models.chat, finalPromptTokens, finalCompletionTokens);
 
-        await saveMessage(conversationId, 'assistant', fullResponse, userId, tenantId, {
+        const chatSummary = `Created notes in the canvas and applied your request: ${instruction}`;
+        await saveMessage(conversationId, 'assistant', chatSummary, userId, tenantId, {
           id: assistantMessageId,
           subject: doc.subject,
           mode: 'notes',

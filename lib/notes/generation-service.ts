@@ -79,11 +79,12 @@ export async function streamNotesGeneration(
   subject: NoteSubject,
   chapterNumber: number,
   chapterTitle: string,
-  chapterText: string
+  chapterText: string,
+  instruction: string
 ) {
   return createStreamingChatCompletion({
     model: models.chat,
-    messages: buildNotesGenerationPrompt(subject, chapterNumber, chapterTitle, chapterText),
+    messages: buildNotesGenerationPrompt(subject, chapterNumber, chapterTitle, chapterText, instruction),
     stream: true,
     stream_options: { include_usage: true },
   });
