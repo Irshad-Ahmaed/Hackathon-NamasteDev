@@ -1,6 +1,8 @@
 import { qdrant, COLLECTION } from '../qdrant';
 import { openai, models } from '../openai';
 import { CitationMetadata } from '../schemas';
+import { withRetry } from '../resilience';
+
 
 export interface RetrievalResult {
   text: string;
@@ -23,13 +25,16 @@ export async function retrieveContext(
   const qdrantClient = qdrant;
 
   // 1. Embed query
-  const embeddingResponse = await openaiClient.embeddings.create({
-    model: models.embedding,
-    input: query,
-    encoding_format: 'float',
-  });
+  const embeddingResponse = await withRetry(() => 
+    openaiClient.embeddings.create({
+      model: models.embedding,
+      input: query,
+      encoding_format: 'float',
+    })
+  );
   
   const vector = embeddingResponse.data[0].embedding;
+
 
   // 2. Search Qdrant with reviewed: true filter and metadata filters
   const must: Record<string, unknown>[] = [
@@ -60,12 +65,15 @@ export async function retrieveContext(
     });
   }
 
-  const searchResults = await qdrantClient.search(COLLECTION, {
-    vector,
-    limit,
-    filter: { must },
-    with_payload: true,
-  });
+  const searchResults = await withRetry(() =>
+    qdrantClient.search(COLLECTION, {
+      vector,
+      limit,
+      filter: { must },
+      with_payload: true,
+    })
+  );
+
 
   return searchResults.map(res => ({
     text: (res.payload?.text as string) || '',

@@ -120,8 +120,28 @@ export default function ChatPage() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
   const [availableChapters, setAvailableChapters] = useState<{ mathematics: number[], science: number[] }>({ mathematics: [], science: [] });
+  
+  // Parental consent states
+  const [consentState, setConsentState] = useState<'pending' | 'given' | 'loading'>('loading');
+  const [parentEmail, setParentEmail] = useState('');
+  const [consentError, setConsentError] = useState('');
+  const [submittingConsent, setSubmittingConsent] = useState(false);
 
   useEffect(() => {
+    // Check consent status
+    fetch('/api/privacy/consent')
+      .then(res => res.json())
+      .then(data => {
+        if (data.consent_state) {
+          setConsentState(data.consent_state);
+        } else {
+          setConsentState('pending');
+        }
+      })
+      .catch(() => {
+        setConsentState('pending');
+      });
+
     fetch('/api/chapters')
       .then(res => res.json())
       .then(data => {
@@ -129,6 +149,32 @@ export default function ChatPage() {
       })
       .catch(console.error);
   }, []);
+
+  const handleConsentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConsentError('');
+    setSubmittingConsent(true);
+
+    try {
+      const res = await fetch('/api/privacy/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentEmail })
+      });
+
+      if (res.ok) {
+        setConsentState('given');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setConsentError(data.error || 'Failed to submit consent. Please try again.');
+      }
+    } catch {
+      setConsentError('Network error. Please try again.');
+    } finally {
+      setSubmittingConsent(false);
+    }
+  };
+
 
   const handleFeedback = React.useCallback(async (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => {
     try {
@@ -338,6 +384,56 @@ export default function ChatPage() {
         content={derivedNotesContent} 
         isGenerating={streaming && mode === 'notes'}
       />
+
+      {/* Parental Consent Overlay Modal */}
+      {consentState === 'pending' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md">
+          <div className="max-w-md w-full mx-4 p-6 rounded-2xl border border-white/10 bg-card/60 backdrop-blur-xl shadow-2xl space-y-6">
+            <div className="text-center space-y-2">
+              <span className="text-4xl">🛡️</span>
+              <h2 className="text-2xl font-bold text-foreground">Parental Consent Required</h2>
+              <p className="text-sm text-muted-foreground">
+                To comply with child privacy regulations, we require a parent/guardian&apos;s email and consent before you start studying.
+              </p>
+            </div>
+            
+            <form onSubmit={handleConsentSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Parent/Guardian Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="parent@example.com"
+                  value={parentEmail}
+                  onChange={(e) => setParentEmail(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-secondary/50 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground leading-relaxed bg-secondary/20 p-3 rounded-xl border border-white/5">
+                By entering your email and clicking &quot;Agree & Proceed&quot;, you agree that your child may use StudyNotes+ and that we may collect and process information as described in our Privacy Policy.
+              </div>
+
+              {consentError && (
+                <div className="text-xs text-destructive bg-destructive/10 p-2 rounded-lg border border-destructive/20">
+                  {consentError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submittingConsent}
+                className="w-full p-3 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl shadow disabled:opacity-50 transition-colors cursor-pointer text-sm"
+              >
+                {submittingConsent ? 'Submitting...' : 'Agree & Proceed'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

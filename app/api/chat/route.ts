@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeChatPipeline } from '@/lib/rag/chat-service';
-import { ChatRequestSchema } from '@/lib/schemas';
+import { ChatRequestSchema, ChatRequest } from '@/lib/schemas';
 import { auth } from '@clerk/nextjs/server';
 import { sql } from '@/lib/db';
 import { AppError } from '@/lib/errors';
 import { enforceRateLimits } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
+import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  const requestId = crypto.randomUUID();
+  let internalUserId = '';
+  let requestData: ChatRequest | null = null;
+
   try {
     // 1. Authenticate user session
     const { userId: clerkId } = await auth();
@@ -24,7 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request', details: result.error.flatten() }, { status: 400 });
     }
 
-    const requestData = result.data;
+    requestData = result.data;
 
     // 3. Resolve internal User UUID and active Tenant ID safely
     const activeTenantHeader = req.headers.get('x-active-tenant-id');
@@ -49,7 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Account deletion in progress.', code: 'FORBIDDEN' }, { status: 403 });
     }
 
-    const internalUserId = firstMembership.user_uuid;
+    internalUserId = firstMembership.user_uuid;
     let tenantId: string;
 
     if (activeTenantHeader) {
@@ -81,6 +88,8 @@ export async function POST(req: NextRequest) {
       userId: internalUserId,
       tenantId,
       request: requestData,
+      requestId,
+      startTime,
     });
 
     // 6. Return stream
@@ -93,9 +102,36 @@ export async function POST(req: NextRequest) {
       },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[POST /api/chat] Error:', error);
     
+    const durationMs = Date.now() - startTime;
+    const statusCode = error instanceof AppError ? error.statusCode : 500;
+    const outcome = (error as { code?: string })?.code === 'MODERATION_BLOCKED' ? 'blocked' : 'error';
+    const userIdHash = internalUserId ? crypto.createHash('sha256').update(internalUserId).digest('hex') : 'anonymous';
+
+    logger.error({
+      requestId,
+      userIdHash,
+      route: '/api/chat',
+      subject: requestData?.subject || 'unknown',
+      chapterId: requestData?.chapterId,
+      mode: requestData?.mode || 'unknown',
+      statusCode,
+      durationMs,
+      outcome,
+      error: error instanceof Error ? error.message : String(error),
+    }, 'chat_request_complete');
+
+    try {
+      await sql`
+        INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
+        VALUES (${userIdHash}, 'chat_message_blocked', ${requestData?.subject || null}, ${requestData?.chapterId || null}, ${requestData?.mode || null}, ${outcome}, ${durationMs}, 0)
+      `;
+    } catch (dbErr) {
+      console.error('Failed to log event to DB on route error:', dbErr);
+    }
+
     if (error instanceof AppError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
@@ -103,4 +139,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
