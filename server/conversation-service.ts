@@ -104,7 +104,15 @@ export async function fetchHistory(
   return rows.map(r => ({
     id: r.id,
     role: r.role as 'user' | 'assistant',
-    content: decryptText(r.content, r.encryption_version),
+    // Guard per-message so one undecryptable row doesn't fail the whole history.
+    // Sibling routes (conversations list, feedback queue) already degrade per-item.
+    content: (() => {
+      try {
+        return decryptText(r.content, r.encryption_version);
+      } catch {
+        return '[Decryption Failed]';
+      }
+    })(),
     feedbackType: r.feedback_type || undefined
   }));
 }

@@ -97,7 +97,8 @@ export function buildPrompt(
 // --- Interactive Notes Workspace prompts -----------------------------------
 
 const HIGHLIGHT_CONVENTION = `Highlighting rules (IMPORTANT — never emit raw HTML or style attributes):
-- Inline emphasis: wrap text in double equals, e.g. ==key term==.
+- Yellow inline highlight: ==key term==.
+- Green, blue, or red inline highlight: ==green|key term==, ==blue|formula==, or ==red|common mistake==.
 - Block highlight: use a fenced block on its own lines:
   :::highlight-yellow
   content
@@ -124,7 +125,7 @@ ${HIGHLIGHT_CONVENTION}`;
 const NOTES_EDIT_SYSTEM_TRANSFORM = `You are StudyNotes+, editing a student's existing study-notes document.
 The user gives a formatting/organization instruction (e.g. highlight, reorder, shorten, remove).
 Return the COMPLETE updated Markdown document — not a diff, not a fragment.
-Preserve all correct existing content and any existing citations. Do NOT add new factual claims.
+Make the smallest possible change that satisfies the instruction. Preserve every unaffected heading, bullet, sentence, formula, whitespace block, and citation exactly as supplied. For a highlight request, only add the required highlight markers around the requested existing text; do not paraphrase, reorder, summarize, or regenerate any other part of the document. When asked to highlight “main points”, “key points”, or “important points”, wrap the existing bullet text under ## Key Concepts, ## Definitions, and ## Common Mistakes in the requested color, without changing the bullet wording. Do NOT add new factual claims.
 ${HIGHLIGHT_CONVENTION}`;
 
 const NOTES_EDIT_SYSTEM_KNOWLEDGE = `You are StudyNotes+, editing a student's existing study-notes document.
@@ -132,20 +133,21 @@ The user asks to add knowledge (examples, definitions, derivations, facts, or ex
 You are given approved NCERT source context. Only add content that is supported by that context, and cite it in a ## Sources section.
 If the context does not support the request, keep the document unchanged except for a short note explaining you could not find supporting NCERT content.
 Return the COMPLETE updated Markdown document — not a diff, not a fragment.
-Preserve all correct existing content and existing citations.
+Make the smallest possible change that satisfies the instruction. Preserve all unrelated existing content and citations exactly as supplied; do not rewrite sections that the instruction does not target.
 ${HIGHLIGHT_CONVENTION}`;
 
 export function buildNotesGenerationPrompt(
   subject: 'mathematics' | 'science',
   chapterNumber: number,
   chapterTitle: string,
-  chapterText: string
+  chapterText: string,
+  instruction?: string
 ): { role: 'system' | 'user'; content: string }[] {
   return [
     { role: 'system', content: NOTES_GENERATION_SYSTEM },
     {
       role: 'user',
-      content: `Subject: ${subject}\nChapter ${chapterNumber}: ${chapterTitle}\n\nNCERT source text:\n\n${chapterText}\n\nTask: Generate the study-notes document now. Maximum ~1200 words.`,
+      content: `Subject: ${subject}\nChapter ${chapterNumber}: ${chapterTitle}\n\nNCERT source text:\n\n${chapterText}\n\nStudent's notes request: ${instruction || 'Create a complete structured revision document.'}\n\nTask: Generate the document and follow the student's requested scope, structure, formatting, headings, bullets, and highlight colors exactly. Keep factual content grounded in the source. Maximum ~1200 words.`,
     },
   ];
 }

@@ -10,6 +10,7 @@ export type Message = {
   citations?: Citation[];
   outcome?: string;
   streaming?: boolean;
+  notesSummary?: boolean;
   feedbackType?: 'helpful' | 'incorrect' | 'inappropriate';
 };
 
@@ -42,7 +43,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     setMessages(prev => [
       ...prev,
       userMsg,
-      { id: assistantId, role: 'assistant', content: '', streaming: true },
+      { id: assistantId, role: 'assistant', content: '', streaming: true, notesSummary: options.mode === 'notes' },
     ]);
 
     let accumulated = '';
