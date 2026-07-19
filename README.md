@@ -8,11 +8,7 @@ The application is designed for Indian students and uses a tenant-aware data mod
 
 A 3-minute walkthrough of StudyNotes+ — NCERT-grounded chat, the side-by-side notes canvas, and safe AI editing:
 
-<video controls preload="metadata" width="100%">
-  <source src="./public/walkthrough.mp4" type="video/mp4">
-  Your Markdown viewer does not support embedded video. Download or open the walkthrough from the link below.
-</video>
-
+[![Watch Demo](./public/hack.png)](https://drive.google.com/file/d/1_VoRJisYsXRr3DrMty6Jz13ADHk3mOvn/view?usp=drive_link)
 
 
 ## Product Capabilities
