@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 import { createMathPlugin } from '@streamdown/math';
 import 'katex/dist/katex.min.css';
@@ -177,6 +177,7 @@ export default function ChatPage() {
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const chatViewportRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -253,6 +254,18 @@ export default function ChatPage() {
       });
     }
   }, [conversationId, loadConversationsList]);
+
+  // Open conversations at the newest message and keep the viewport at the
+  // bottom while a response is streaming. The frame waits for the message DOM
+  // to finish rendering before measuring scrollHeight.
+  useEffect(() => {
+    if (loadingHistory || messages.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = chatViewportRef.current;
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, loadingHistory]);
 
   const selectConversation = async (convo: ConversationItem) => {
     try {
@@ -679,7 +692,7 @@ export default function ChatPage() {
         isNotesOpen ? 'flex-1 md:mr-3' : 'flex-1 md:mr-6'
       }`}>
         {/* Main Chat Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10 no-scrollbar">
+        <main ref={chatViewportRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10 no-scrollbar">
           {loadingHistory ? (
             <div className="m-auto flex flex-col items-center justify-center space-y-2 opacity-60">
               <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
