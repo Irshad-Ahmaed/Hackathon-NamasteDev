@@ -92,15 +92,19 @@ export async function fetchHistory(
   conversationId: string,
   userId: string,
   tenantId: string
-): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
+): Promise<{ id: string; role: 'user' | 'assistant'; content: string; feedbackType?: 'helpful' | 'incorrect' | 'inappropriate' }[]> {
   await authorizeConversation(conversationId, userId, tenantId);
   const rows = (await sql`
-    SELECT role, content, encryption_version FROM messages
-    WHERE conversation_id = ${conversationId} AND content IS NOT NULL
-    ORDER BY created_at ASC LIMIT 20
-  `) as unknown as Array<{ role: string; content: string; encryption_version: string }>;
+    SELECT m.id, m.role, m.content, m.encryption_version, f.type as feedback_type
+    FROM messages m
+    LEFT JOIN feedback f ON m.id = f.message_id AND f.user_id = ${userId}
+    WHERE m.conversation_id = ${conversationId} AND m.content IS NOT NULL
+    ORDER BY m.created_at ASC LIMIT 20
+  `) as unknown as Array<{ id: string; role: string; content: string; encryption_version: string; feedback_type: 'helpful' | 'incorrect' | 'inappropriate' | null }>;
   return rows.map(r => ({
+    id: r.id,
     role: r.role as 'user' | 'assistant',
-    content: decryptText(r.content, r.encryption_version)
+    content: decryptText(r.content, r.encryption_version),
+    feedbackType: r.feedback_type || undefined
   }));
 }

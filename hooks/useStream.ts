@@ -5,6 +5,7 @@ export type StreamEvent =
   | { type: 'init'; conversationId: string; citations: unknown[]; outcome: string; assistantMessageId?: string }
   | { type: 'token'; content: string }
   | { type: 'error'; code: string; message: string }
+  | { type: 'note_document_saved'; documentId: string; revision: number; operation: 'generate' | 'regenerate' | 'command'; citations: unknown[] }
   | { type: 'done' };
 
 // Low-level hook: reads SSE from a POST endpoint.

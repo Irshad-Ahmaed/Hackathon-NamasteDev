@@ -27,6 +27,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid feedback type' }, { status: 400 });
     }
 
+    // Validate messageId is a proper UUID before sending to postgres to avoid NeonDbError 22P02
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(messageId)) {
+      return NextResponse.json({ error: 'Invalid message ID format' }, { status: 400 });
+    }
+
     // Resolve internal User UUID
     const user = (await sql`
       SELECT id FROM users WHERE clerk_id = ${clerkId} AND deletion_requested_at IS NULL
@@ -50,25 +56,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message not found or access denied' }, { status: 404 });
     }
 
-    // Check if feedback already exists to prevent duplicates (sidesteps missing ON CONFLICT constraint errors)
-    const existing = (await sql`
-      SELECT id FROM feedback 
-      WHERE message_id = ${messageId} AND user_id = ${userId} AND type = ${type}
-    `) as unknown as Array<{ id: string }>;
-
-    if (existing.length > 0) {
-      return NextResponse.json({ error: 'Feedback already submitted for this message' }, { status: 409 });
-    }
-
-    await sql`
+    // A single upsert keeps the one-feedback-per-message invariant intact under concurrent requests.
+    const result = (await sql`
       INSERT INTO feedback (message_id, user_id, type)
       VALUES (${messageId}, ${userId}, ${type})
-      RETURNING id
-    `;
+      ON CONFLICT (message_id, user_id)
+      DO UPDATE SET
+        type = EXCLUDED.type,
+        reported_at = now()
+      RETURNING id, type
+    `) as unknown as Array<{ id: string; type: string }>;
 
-    logger.info({ event: 'feedback_submitted', clerkIdHash, messageId, type });
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'Unable to save feedback' }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true, message: 'Feedback submitted successfully' });
+    logger.info({ event: 'feedback_upserted', clerkIdHash, messageId, type });
+    return NextResponse.json({ success: true, message: 'Feedback saved successfully' });
   } catch (error) {
     console.error('[POST /api/feedback] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -107,6 +107,9 @@ export function chunkChapter(
       });
     }
 
+    if (end >= totalLength) {
+      break;
+    }
     // Move cursor with overlap
     cursor = Math.max(cursor + 1, end - OVERLAP_CHARS);
   }

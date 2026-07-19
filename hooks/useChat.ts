@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useStream } from './useStream';
 import type { CitationMetadata as Citation } from '@/lib/schemas';
 
@@ -10,6 +10,7 @@ export type Message = {
   citations?: Citation[];
   outcome?: string;
   streaming?: boolean;
+  feedbackType?: 'helpful' | 'incorrect' | 'inappropriate';
 };
 
 export function useChat(subject: string, language: 'en' | 'hi', chapterId?: string) {
@@ -17,16 +18,15 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
   const [conversationId, setConversationId] = useState<string | undefined>();
   const { readStream, streaming, cancel } = useStream();
 
-  // Reset chat context when subject, language, or chapter changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMessages([]);
-    setConversationId(undefined);
-  }, [subject, language, chapterId]);
+
 
   const sendMessage = useCallback(async (
     text: string,
-    options: { mode: string }
+    options: {
+      mode: string;
+      noteDocumentId?: string;
+      onNoteDocumentSaved?: (evt: { documentId: string; revision: number; operation: 'generate' | 'regenerate' | 'command'; citations: Citation[] }) => void;
+    }
   ) => {
     if (!text.trim() || streaming) return; // no-op if already streaming
 
@@ -49,7 +49,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     let activeId = assistantId;
     await readStream('/api/chat', {
       message: text, subject, language, conversationId,
-      chapterId, mode: options.mode,
+      chapterId, mode: options.mode, noteDocumentId: options.noteDocumentId,
     }, (event) => {
       if (event.type === 'init') {
         setConversationId(event.conversationId);
@@ -57,7 +57,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
           activeId = event.assistantMessageId;
         }
         setMessages(prev => prev.map(m =>
-          m.id === assistantId
+          (m.id === assistantId || m.id === activeId)
             ? { ...m, id: activeId, citations: event.citations as Citation[], outcome: event.outcome }
             : m
         ));
@@ -66,11 +66,20 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, content: accumulated } : m
         ));
+      } else if (event.type === 'note_document_saved') {
+        // Persistence signal: only now is the document revision authoritative.
+        options.onNoteDocumentSaved?.({
+          documentId: event.documentId,
+          revision: event.revision,
+          operation: event.operation,
+          citations: (event.citations as Citation[]) ?? [],
+        });
       } else if (event.type === 'error') {
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, content: event.message, streaming: false } : m
         ));
       } else if (event.type === 'done') {
+        // Transport-level completion only; not a persistence signal.
         setMessages(prev => prev.map(m =>
           m.id === activeId ? { ...m, streaming: false } : m
         ));
@@ -78,5 +87,5 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     });
   }, [subject, language, conversationId, chapterId, streaming, readStream]);
 
-  return { messages, sendMessage, streaming, cancel };
+  return { messages, sendMessage, streaming, cancel, conversationId, setConversationId, setMessages };
 }

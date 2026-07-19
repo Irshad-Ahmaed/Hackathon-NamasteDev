@@ -9,6 +9,12 @@ import { AppError, SAFE_ESCALATION_MESSAGE, DistressError } from '../errors';
 import { logger } from '../logger';
 import { sql } from '../db';
 import crypto from 'crypto';
+import {
+  getApprovedChapterContext,
+  streamNotesGeneration,
+  NOTE_DOCUMENT_CHAR_LIMIT,
+} from '../notes/generation-service';
+import { loadDocumentById, commitRevision } from '../../server/note-document-service';
 
 export interface ChatServiceOptions {
   userId: string;
@@ -54,6 +60,23 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
     chapterId, 
     mode: isGeneralChat ? undefined : mode 
   });
+
+  // 3b. Notes generation branch: Generate Notes mode with a private document.
+  // This streams NCERT-grounded notes into the canvas and, on success, commits
+  // a new document revision and emits a `note_document_saved` event.
+  if (mode === 'notes' && request.noteDocumentId) {
+    return await executeNotesGeneration({
+      userId,
+      tenantId,
+      conversationId,
+      noteDocumentId: request.noteDocumentId,
+      subject,
+      language,
+      chapterId,
+      requestId,
+      startTime,
+    });
+  }
 
   // 4. Fetch History
   const history = await fetchHistory(conversationId, userId, tenantId);
@@ -148,6 +171,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
 
   // 9. Stream Response & Apply Output Moderation Buffer
+  let cancelled = false;
   return new ReadableStream({
     async start(controller) {
       // Send Init Event
@@ -180,6 +204,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
       try {
         for await (const chunk of stream) {
+          if (cancelled) throw new Error('Streaming cancelled');
           if (chunk.usage) {
             promptTokens = chunk.usage.prompt_tokens;
             completionTokens = chunk.usage.completion_tokens;
@@ -190,6 +215,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
           }
         }
         await moderationBuffer.flush();
+        if (cancelled) throw new Error('Streaming cancelled');
 
         const finalPromptTokens = promptTokens || (Math.ceil(standaloneQuery.length / 4) + 500);
         const finalCompletionTokens = completionTokens || Math.ceil(fullResponse.length / 4);
@@ -269,7 +295,186 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
       } finally {
         controller.close();
       }
-    }
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+}
+
+interface NotesGenerationOptions {
+  userId: string;
+  tenantId: string;
+  conversationId: string;
+  noteDocumentId: string;
+  subject: 'mathematics' | 'science';
+  language: 'en' | 'hi';
+  chapterId?: string;
+  requestId: string;
+  startTime: number;
+}
+
+/**
+ * Streams NCERT-grounded notes generation into the canvas for Generate Notes
+ * mode. On a successful stream it atomically commits a new document revision
+ * and emits `note_document_saved`. Error/cancellation paths never commit and
+ * never emit that event, leaving the saved document intact.
+ */
+async function executeNotesGeneration(options: NotesGenerationOptions): Promise<ReadableStream> {
+  const { userId, tenantId, conversationId, noteDocumentId, subject, language, chapterId, requestId, startTime } = options;
+
+  // Ownership-scoped load of the private document (throws 404 if not owned).
+  const doc = await loadDocumentById(noteDocumentId, userId, tenantId);
+
+  // The document, not client-supplied request fields, defines its subject,
+  // chapter, and language. Reject mismatches rather than mixing source context
+  // from one chapter into another private document.
+  const requestedChapterNumber = chapterId && /^\d+$/.test(chapterId)
+    ? Number(chapterId)
+    : undefined;
+  if (
+    doc.subject !== subject ||
+    doc.language !== language ||
+    (requestedChapterNumber !== undefined && doc.chapterNumber !== requestedChapterNumber)
+  ) {
+    throw new AppError('BAD_REQUEST', 'Selected subject, chapter, or language does not match this notes document.', 400);
+  }
+
+  const chapterNumber = doc.chapterNumber;
+  const ctx = await getApprovedChapterContext(doc.subject, chapterNumber, doc.language);
+
+  const assistantMessageId = requestId || crypto.randomUUID();
+  const userIdHash = crypto.createHash('sha256').update(userId).digest('hex');
+
+  if (!ctx) {
+    const msg = "I couldn't find approved NCERT source content for this chapter, so I can't generate grounded notes yet.";
+    return createStaticStream(msg, conversationId, [], 'refusal', assistantMessageId);
+  }
+
+  const stream = await streamNotesGeneration(doc.subject, chapterNumber, ctx.chapterTitle, ctx.chapterText);
+
+  let cancelled = false;
+  return new ReadableStream({
+    async start(controller) {
+      const initEvent = JSON.stringify({
+        type: 'init',
+        conversationId,
+        citations: ctx.citations,
+        outcome: 'success',
+        assistantMessageId,
+      });
+      controller.enqueue(`data: ${initEvent}\n\n`);
+
+      let fullResponse = '';
+      let promptTokens = 0;
+      let completionTokens = 0;
+
+      const moderationBuffer = new ModeratedStreamBuffer(
+        (safeText) => {
+          fullResponse += safeText;
+          controller.enqueue(`data: ${JSON.stringify({ type: 'token', content: safeText })}\n\n`);
+        },
+        (error) => {
+          controller.enqueue(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'MODERATION_ERROR' })}\n\n`);
+        },
+        450
+      );
+
+      try {
+        for await (const chunk of stream) {
+          if (cancelled) throw new Error('Notes generation cancelled');
+          if (chunk.usage) {
+            promptTokens = chunk.usage.prompt_tokens;
+            completionTokens = chunk.usage.completion_tokens;
+          }
+          const content = chunk.choices?.[0]?.delta?.content || '';
+          if (content) await moderationBuffer.addChunk(content);
+        }
+        await moderationBuffer.flush();
+        if (cancelled) throw new Error('Notes generation cancelled');
+
+        const finalContent = fullResponse.slice(0, NOTE_DOCUMENT_CHAR_LIMIT);
+
+        // Atomically persist the generated revision (archives prior for Undo).
+        const updated = await commitRevision({
+          id: noteDocumentId,
+          userId,
+          tenantId,
+          content: finalContent,
+          expectedRevision: doc.revision,
+        });
+
+        // Persist assistant chat message for history parity.
+        const finalPromptTokens = promptTokens || (Math.ceil(ctx.chapterText.length / 4) + 500);
+        const finalCompletionTokens = completionTokens || Math.ceil(fullResponse.length / 4);
+        const finalCost = estimateCostUsd(models.chat, finalPromptTokens, finalCompletionTokens);
+
+        await saveMessage(conversationId, 'assistant', fullResponse, userId, tenantId, {
+          id: assistantMessageId,
+          subject: doc.subject,
+          mode: 'notes',
+          outcome: 'success',
+          retrievedChunkCount: ctx.chunkCount,
+          model: models.chat,
+          inputTokens: finalPromptTokens,
+          outputTokens: finalCompletionTokens,
+          estimatedCostUsd: finalCost,
+        });
+
+        const savedEvent = JSON.stringify({
+          type: 'note_document_saved',
+          documentId: updated.id,
+          revision: updated.revision,
+          operation: 'generate',
+          citations: ctx.citations,
+        });
+        controller.enqueue(`data: ${savedEvent}\n\n`);
+
+        logger.info({
+          requestId,
+          userIdHash,
+          route: '/api/chat',
+          subject: doc.subject,
+          chapterId,
+          mode: 'notes',
+          statusCode: 200,
+          durationMs: Date.now() - startTime,
+          retrievedChunkCount: ctx.chunkCount,
+          model: models.chat,
+          inputTokens: finalPromptTokens,
+          outputTokens: finalCompletionTokens,
+          estimatedCostUsd: finalCost,
+          outcome: 'success',
+        }, 'chat_request_complete');
+
+        await sql`
+          INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
+          VALUES (${userIdHash}, 'notes_generated', ${doc.subject}, ${chapterId || null}, 'notes', 'success', ${Date.now() - startTime}, ${finalCost})
+        `;
+      } catch (err) {
+        // Do NOT commit or emit note_document_saved on error/cancellation.
+        controller.enqueue(`data: ${JSON.stringify({ type: 'error', message: 'Notes generation failed', code: 'STREAM_ERROR' })}\n\n`);
+        logger.error({
+          requestId,
+          userIdHash,
+          route: '/api/chat',
+          subject: doc.subject,
+          chapterId,
+          mode: 'notes',
+          statusCode: 500,
+          durationMs: Date.now() - startTime,
+          outcome: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        }, 'chat_request_complete');
+      } finally {
+        controller.close();
+      }
+    },
+    cancel() {
+      // The model iterator may not support aborting directly, but this prevents
+      // its eventual output from being committed after the client disconnects.
+      cancelled = true;
+    },
   });
 }
 

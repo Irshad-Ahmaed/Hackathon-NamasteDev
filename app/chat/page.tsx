@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Streamdown } from 'streamdown';
 import { createMathPlugin } from '@streamdown/math';
 import 'katex/dist/katex.min.css';
@@ -10,16 +10,24 @@ import type { Message } from '@/hooks/useChat';
 import { useSubjectFilter, Subject, Mode } from '@/hooks/useSubjectFilter';
 import type { CitationMetadata as Citation } from '@/lib/schemas';
 import { NotesCanvas } from '@/components/NotesCanvas';
-import { UserButton } from '@clerk/nextjs';
+import { ChatPanel } from '@/components/ChatPanel';
+import type { ConversationItem } from '@/components/ChatPanel';
 
 const mathPlugin = createMathPlugin({ singleDollarTextMath: true });
+
+type FeedbackType = 'helpful' | 'incorrect' | 'inappropriate';
 
 // Message component wrapped in React.memo to prevent re-rendering historical messages
 const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: {
   message: Message;
-  onFeedback?: (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => void;
+  onFeedback?: (messageId: string, type: FeedbackType) => void;
   feedbackStatus?: string;
 }) => {
+  const activeFeedback = message.feedbackType;
+  const statusLabel = feedbackStatus || (activeFeedback ? (
+    activeFeedback === 'helpful' ? '✓ Helpful' : activeFeedback === 'incorrect' ? '✓ Marked incorrect' : '✓ Reported'
+  ) : '');
+
   return (
     <div className={`p-4 my-2 rounded-xl ${message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto max-w-[80%]' : 'bg-muted/70 text-foreground mr-auto max-w-[100%] border border-white/5 backdrop-blur-md shadow-sm'}`}>
       <div className="font-semibold text-sm mb-1 opacity-70">
@@ -51,29 +59,55 @@ const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: {
       )}
       {message.role === 'assistant' && !message.streaming && onFeedback && (
         <div className="mt-3 pt-2 border-t border-border/50 flex flex-wrap items-center gap-4 text-xs">
+          {/* Helpful button — turns solid blue when active */}
           <button
             onClick={() => onFeedback(message.id, 'helpful')}
             title="Helpful"
-            className="hover:text-blue-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
+            disabled={!!activeFeedback}
+            className={`transition-all duration-200 font-medium flex items-center cursor-pointer text-lg ${
+              activeFeedback === 'helpful'
+                ? 'opacity-100 drop-shadow-[0_0_6px_rgba(59,130,246,0.8)] scale-110'
+                : activeFeedback
+                ? 'opacity-25 cursor-default'
+                : 'opacity-60 hover:opacity-100 hover:drop-shadow-[0_0_6px_rgba(59,130,246,0.6)] hover:scale-110'
+            }`}
           >
             👍
           </button>
+          {/* Incorrect button — turns solid amber when active */}
           <button
             onClick={() => onFeedback(message.id, 'incorrect')}
             title="This is incorrect"
-            className="hover:text-amber-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
+            disabled={!!activeFeedback}
+            className={`transition-all duration-200 font-medium flex items-center cursor-pointer text-lg ${
+              activeFeedback === 'incorrect'
+                ? 'opacity-100 drop-shadow-[0_0_6px_rgba(245,158,11,0.8)] scale-110'
+                : activeFeedback
+                ? 'opacity-25 cursor-default'
+                : 'opacity-60 hover:opacity-100 hover:drop-shadow-[0_0_6px_rgba(245,158,11,0.6)] hover:scale-110'
+            }`}
           >
             👎
           </button>
+          {/* Report button — turns solid red when active */}
           <button
             onClick={() => onFeedback(message.id, 'inappropriate')}
             title="Report answer"
-            className="hover:text-red-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
+            disabled={!!activeFeedback}
+            className={`transition-all duration-200 font-medium flex items-center cursor-pointer text-lg ${
+              activeFeedback === 'inappropriate'
+                ? 'opacity-100 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)] scale-110'
+                : activeFeedback
+                ? 'opacity-25 cursor-default'
+                : 'opacity-60 hover:opacity-100 hover:drop-shadow-[0_0_6px_rgba(239,68,68,0.6)] hover:scale-110'
+            }`}
           >
             🚩
           </button>
-          {feedbackStatus && (
-            <span className="text-slate-400 font-normal italic ml-auto">{feedbackStatus}</span>
+          {statusLabel && (
+            <span className={`font-normal italic ml-auto ${
+              activeFeedback ? 'text-green-400' : 'text-slate-400'
+            }`}>{statusLabel}</span>
           )}
         </div>
       )}
@@ -118,17 +152,69 @@ const CHAPTER_NAMES: Record<Subject, Record<number, string>> = {
 
 export default function ChatPage() {
   const { subject, setSubject, chapterId, setChapterId, mode, setMode } = useSubjectFilter();
-  const { messages, sendMessage, streaming, cancel } = useChat(subject, 'en', chapterId);
+  const { 
+    messages, 
+    sendMessage, 
+    streaming, 
+    cancel, 
+    conversationId, 
+    setConversationId, 
+    setMessages 
+  } = useChat(subject, 'en', chapterId);
   const [inputText, setInputText] = useState('');
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
   const [availableChapters, setAvailableChapters] = useState<{ mathematics: number[], science: number[] }>({ mathematics: [], science: [] });
+
+  // --- Interactive notes document state (owned by the page) ---
+  const [noteDoc, setNoteDoc] = useState<{ documentId: string; revision: number } | null>(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSaveState, setNoteSaveState] = useState<'idle' | 'saving' | 'saved' | 'conflict'>('idle');
+  const [isAiEditing, setIsAiEditing] = useState(false);
+
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setIsSidebarOpen(window.innerWidth >= 768);
+    });
+  }, []);
+
+  // Reset the active notes document when the subject or chapter changes so one
+  // chapter's document never bleeds into another.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNoteDoc(null);
+    setNoteContent('');
+    setNoteSaveState('idle');
+  }, [subject, chapterId]);
 
   // Parental consent states
   const [consentState, setConsentState] = useState<'pending' | 'given' | 'loading'>('loading');
   const [parentEmail, setParentEmail] = useState('');
   const [consentError, setConsentError] = useState('');
   const [submittingConsent, setSubmittingConsent] = useState(false);
+
+  const loadConversationsList = useCallback(async () => {
+    try {
+      // Yield to the event loop so that state changes inside the effect run asynchronously,
+      // avoiding Next.js/React eslint warnings.
+      await Promise.resolve();
+      setLoadingConversations(true);
+      const res = await fetch('/api/chat/conversations');
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data);
+      }
+    } catch (e) {
+      console.error('Failed to load conversations', e);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Check consent status
@@ -151,7 +237,93 @@ export default function ChatPage() {
         if (!data.error) setAvailableChapters(data);
       })
       .catch(console.error);
-  }, []);
+
+    Promise.resolve().then(() => {
+      loadConversationsList();
+    });
+  }, [loadConversationsList]);
+
+  // Re-fetch conversation list when conversationId changes (e.g. when we start a new conversation and get an ID)
+  useEffect(() => {
+    if (conversationId) {
+      Promise.resolve().then(() => {
+        loadConversationsList();
+      });
+    }
+  }, [conversationId, loadConversationsList]);
+
+  const selectConversation = async (convo: ConversationItem) => {
+    try {
+      setLoadingHistory(true);
+      const res = await fetch(`/api/chat/history?conversationId=${convo.id}`);
+      if (res.ok) {
+        const historyMessages = await res.json();
+        
+        // 1. Update filter context first
+        setSubject(convo.subject);
+        setChapterId(convo.chapterId);
+        
+        // 2. Set the messages and active ID
+        setMessages(historyMessages);
+        setConversationId(convo.id);
+        
+        setIsSidebarOpen(false); // Close sidebar on mobile
+      }
+    } catch (e) {
+      console.error('Failed to load conversation history', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setConversationId(undefined);
+    setChapterId(undefined);
+  };
+
+  const handleRenameConversation = async (id: string, newTitle: string) => {
+    try {
+      const res = await fetch('/api/chat/conversations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: id, title: newTitle }),
+      });
+      if (res.ok) {
+        setConversations(prev => prev.map(c => 
+          c.id === id ? { ...c, title: newTitle } : c
+        ));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to rename conversation');
+      }
+    } catch (err) {
+      console.error('Error renaming conversation:', err);
+      alert('Network error. Please try again.');
+    }
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      const res = await fetch(`/api/chat/conversations?conversationId=${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        if (conversationId === id) {
+          handleNewChat();
+        }
+        setConversations(prev => prev.filter(c => c.id !== id));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete conversation');
+      }
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      alert('Network error. Please try again.');
+    }
+  };
+
+
 
   const handleConsentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,7 +351,13 @@ export default function ChatPage() {
   };
 
 
-  const handleFeedback = React.useCallback(async (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => {
+  const handleFeedback = React.useCallback(async (messageId: string, type: FeedbackType) => {
+    // Guard: only real DB UUIDs can be rated. Messages without saved IDs are silently skipped.
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(messageId)) {
+      setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Cannot rate this message yet' }));
+      return;
+    }
     try {
       setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Submitting...' }));
       const res = await fetch('/api/feedback', {
@@ -188,10 +366,16 @@ export default function ChatPage() {
         body: JSON.stringify({ messageId, type })
       });
       if (res.ok) {
-        setFeedbackStatus(prev => ({
-          ...prev,
-          [messageId]: `Feedback submitted: ${type === 'helpful' ? 'Helpful' : type === 'incorrect' ? 'Incorrect' : 'Reported'}`
-        }));
+        // Persist the feedback type directly to the message state in memory
+        setMessages(prev => prev.map(m =>
+          m.id === messageId ? { ...m, feedbackType: type } : m
+        ));
+        // Clear transient status since derived state will now display the feedback type
+        setFeedbackStatus(prev => {
+          const next = { ...prev };
+          delete next[messageId];
+          return next;
+        });
       } else {
         const err = await res.json().catch(() => ({}));
         setFeedbackStatus(prev => ({ ...prev, [messageId]: `Error: ${err.error || 'Failed to submit'}` }));
@@ -199,25 +383,196 @@ export default function ChatPage() {
     } catch {
       setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Network error. Please try again.' }));
     }
-  }, []);
+  }, [setMessages]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (streaming || !inputText.trim()) return;
+    if (streaming || isAiEditing || !inputText.trim()) return;
 
-    // If asking for notes, open the canvas and let the chat display it there
-    if (mode === 'notes') {
-      setIsNotesOpen(true);
+    if (mode !== 'notes') {
+      sendMessage(inputText, { mode });
+      setInputText('');
+      return;
     }
 
-    sendMessage(inputText, { mode });
+    // --- Generate Notes mode: the input controls the active document ---
+    void handleNotesSend(inputText);
     setInputText('');
+  };
+
+  // Ensure the private document exists for the current subject/chapter, returning it.
+  const ensureNoteDocument = React.useCallback(async (): Promise<{ documentId: string; revision: number; content: string } | null> => {
+    const chapNum = chapterId ? parseInt(chapterId, 10) : NaN;
+    if (isNaN(chapNum)) {
+      alert('Please select a specific chapter before generating notes.');
+      return null;
+    }
+    if (noteDoc) return { ...noteDoc, content: noteContent };
+
+    const res = await fetch('/api/note-documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, chapterNumber: chapNum, language: 'en' }),
+    });
+    if (!res.ok) {
+      alert('Could not open your notes document. Please try again.');
+      return null;
+    }
+    const data = await res.json();
+    const doc = { documentId: data.documentId, revision: data.revision };
+    setNoteDoc(doc);
+    setNoteContent(data.content || '');
+    return { ...doc, content: data.content || '' };
+  }, [chapterId, subject, noteDoc, noteContent]);
+
+  const handleNotesSend = async (instruction: string) => {
+    setIsNotesOpen(true);
+    const doc = await ensureNoteDocument();
+    if (!doc) return;
+
+    // If the document has no content yet, first message generates it via the
+    // chat generation path. Otherwise, later messages revise it via commands.
+    if (!doc.content.trim()) {
+      sendMessage(instruction, {
+        mode: 'notes',
+        noteDocumentId: doc.documentId,
+        onNoteDocumentSaved: (evt) => {
+          setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+          // Pull the authoritative saved content into the controlled canvas so
+          // it persists after the transient chat stream ends.
+          void reloadNoteDocument(evt.documentId);
+        },
+      });
+      return;
+    }
+
+    // Revise the active document through the server-authoritative command endpoint.
+    await runNoteCommand(doc.documentId, doc.revision, instruction);
+  };
+
+  const runNoteCommand = async (documentId: string, expectedRevision: number, instruction: string) => {
+    setIsAiEditing(true);
+    setNoteSaveState('idle');
+    try {
+      const res = await fetch(`/api/note-documents/${documentId}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction, expectedRevision }),
+      });
+      if (res.status === 409) {
+        setNoteSaveState('conflict');
+        return;
+      }
+      if (!res.ok || !res.body) {
+        alert('The edit could not be applied. Please try again.');
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let saved = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.type === 'token') {
+              accumulated += evt.content;
+              setNoteContent(accumulated); // temporary preview
+            } else if (evt.type === 'note_document_saved') {
+              saved = true;
+              setNoteDoc({ documentId: evt.documentId, revision: evt.revision });
+            }
+          } catch { /* ignore malformed */ }
+        }
+      }
+      if (!saved) {
+        // Stream ended without a persistence event: keep prior saved content.
+        await reloadNoteDocument(documentId);
+      }
+    } catch {
+      await reloadNoteDocument(documentId);
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
+
+  const reloadNoteDocument = async (documentId: string) => {
+    const res = await fetch(`/api/note-documents/${documentId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setNoteDoc({ documentId: data.documentId, revision: data.revision });
+      setNoteContent(data.content || '');
+    }
+  };
+
+  const handleNoteSave = async () => {
+    if (!noteDoc) return;
+    setNoteSaveState('saving');
+    try {
+      const res = await fetch(`/api/note-documents/${noteDoc.documentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: noteContent, expectedRevision: noteDoc.revision }),
+      });
+      if (res.status === 409) {
+        setNoteSaveState('conflict');
+        return;
+      }
+      if (!res.ok) {
+        setNoteSaveState('idle');
+        alert('Save failed. Please try again.');
+        return;
+      }
+      const data = await res.json();
+      setNoteDoc({ documentId: data.documentId, revision: data.revision });
+      setNoteContent(data.content);
+      setNoteSaveState('saved');
+      setTimeout(() => setNoteSaveState('idle'), 2000);
+    } catch {
+      setNoteSaveState('idle');
+      alert('Network error while saving.');
+    }
+  };
+
+  const handleNoteUndo = async () => {
+    if (!noteDoc) return;
+    setIsAiEditing(true);
+    try {
+      const res = await fetch(`/api/note-documents/${noteDoc.documentId}/undo`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setNoteDoc({ documentId: data.documentId, revision: data.revision });
+        setNoteContent(data.content);
+      }
+    } finally {
+      setIsAiEditing(false);
+    }
+  };
+
+  const handleConflictReload = () => {
+    if (noteDoc) void reloadNoteDocument(noteDoc.documentId);
+    setNoteSaveState('idle');
+  };
+  const handleConflictCopyMine = () => {
+    navigator.clipboard.writeText(noteContent);
+    setNoteSaveState('idle');
   };
 
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
 
-  // Derive notes content only when in 'notes' mode — avoids showing quiz/explain answers in the Notes Canvas.
-  // We walk backwards to find the most recent assistant message that was generated in notes mode.
+  // While notes are being generated (first message / regenerate), the stream
+  // lands in the chat assistant message; mirror it into the canvas preview.
+  // Otherwise the canvas is controlled by the page's noteContent state.
+  const isGeneratingNotes = !!(streaming && mode === 'notes');
   let lastNotesAssistant: Message | undefined;
   if (mode === 'notes') {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -227,13 +582,12 @@ export default function ChatPage() {
       }
     }
   }
-
-  const derivedNotesContent = activeMessage && mode === 'notes'
-    ? activeMessage.content
-    : (lastNotesAssistant ? lastNotesAssistant.content : '');
+  const canvasContent = isGeneratingNotes
+    ? (activeMessage?.content ?? lastNotesAssistant?.content ?? noteContent)
+    : noteContent;
 
   return (
-    <div className="flex flex-col h-screen bg-background relative overflow-hidden">
+    <div className="flex flex-row h-screen bg-background relative overflow-hidden w-full">
       {/* Animated Gradient Background and Dot Grid */}
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px] mix-blend-screen opacity-70 animate-[pulse_10s_infinite_alternate]" />
@@ -249,43 +603,58 @@ export default function ChatPage() {
         }} />
       </div>
 
-      {/* Header */}
-      <header className="absolute top-4 left-1/2 -translate-x-1/2 w-[90%] md:w-[80%] flex items-center justify-between px-6 md:px-8 h-16 rounded-full border border-white/10 bg-background/60 backdrop-blur-md shadow-2xl z-50">
-        <div className="font-bold text-xl flex items-center gap-2 whitespace-nowrap">
-          <span className="text-primary">✦</span> StudyNotes+
-        </div>
+      {/* Sidebar Panel Component */}
+      <ChatPanel
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        loadingConversations={loadingConversations}
+        conversations={conversations}
+        conversationId={conversationId}
+        selectConversation={selectConversation}
+        handleNewChat={handleNewChat}
+        chapterNames={CHAPTER_NAMES}
+        onRenameConversation={handleRenameConversation}
+        onDeleteConversation={handleDeleteConversation}
+        setIsNotesOpen={setIsNotesOpen}
+      />
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsNotesOpen(true)}
-            className="px-4 cursor-pointer hover:bg-white/10 hover:text-primary-foreground py-2 bg-secondary text-secondary-foreground text-sm font-medium rounded-full hover:bg-secondary/80 transition-colors shadow-sm whitespace-nowrap"
-          >
-            Notes Canvas
-          </button>
-          <UserButton />
-        </div>
-      </header>
+      {/* Sidebar Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-45 md:hidden"
+        />
+      )}
 
-      {/* Main Chat Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pt-28 md:pt-32 flex flex-col gap-2 relative z-10">
-        {messages.length === 0 ? (
-          <div className="m-auto text-center space-y-4 max-w-lg">
-            <div className="text-4xl">👋</div>
-            <h2 className="text-2xl font-bold">Hello! Let&apos;s study.</h2>
-            <p className="text-muted-foreground">
-              Select your subject and ask any question from the CBSE Class 10 syllabus.
-            </p>
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              message={msg}
-              onFeedback={handleFeedback}
-              feedbackStatus={feedbackStatus[msg.id]}
-            />
-          ))
-        )}
+      {/* Main Chat Area Wrapper */}
+      <div className={`flex-1 flex flex-col relative overflow-hidden z-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] shadow-2xl transition-all duration-300 m-4 md:my-6 md:mr-6 ${
+        isSidebarOpen ? 'md:ml-3' : 'md:ml-6'
+      }`}>
+        {/* Main Chat Area */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10 no-scrollbar">
+          {loadingHistory ? (
+            <div className="m-auto flex flex-col items-center justify-center space-y-2 opacity-60">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium">Loading history...</span>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="m-auto text-center space-y-4 max-w-lg">
+              <div className="text-4xl">👋</div>
+              <h2 className="text-2xl font-bold">Hello! Let&apos;s study.</h2>
+              <p className="text-muted-foreground">
+                Select your subject and ask any question from the CBSE Class 10 syllabus.
+              </p>
+            </div>
+          ) : (
+            messages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                onFeedback={handleFeedback}
+                feedbackStatus={feedbackStatus[msg.id]}
+              />
+            ))
+          )}
       </main>
 
       {/* Input Footer */}
@@ -347,6 +716,8 @@ export default function ChatPage() {
                       onChange={(e) => {
                         setSubject(e.target.value as Subject);
                         setChapterId(undefined);
+                        setMessages([]);
+                        setConversationId(undefined);
                       }}
                       className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors"
                     >
@@ -357,7 +728,11 @@ export default function ChatPage() {
                     {/* Chapter Selector */}
                     <select
                       value={chapterId || ''}
-                      onChange={(e) => setChapterId(e.target.value || undefined)}
+                      onChange={(e) => {
+                        setChapterId(e.target.value || undefined);
+                        setMessages([]);
+                        setConversationId(undefined);
+                      }}
                       className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 max-w-[180px] md:max-w-xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors truncate"
                     >
                       <option value="">📚 All Chapters</option>
@@ -382,6 +757,16 @@ export default function ChatPage() {
                   <option value="quiz">🎯 Quiz Me</option>
                   <option value="general">💬 General Chat</option>
                 </select>
+
+                {/* Generate Notes target chip */}
+                {mode === 'notes' && (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-medium text-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block" />
+                    {chapterId
+                      ? `Editing: ${subject === 'mathematics' ? 'Mathematics' : 'Science'}, ${CHAPTER_NAMES[subject][parseInt(chapterId, 10)] || `Chapter ${chapterId}`}`
+                      : 'Select a chapter to edit notes'}
+                  </span>
+                )}
               </div>
 
               <div className="font-mono text-[10px] opacity-60">
@@ -396,11 +781,21 @@ export default function ChatPage() {
       <NotesCanvas
         isOpen={isNotesOpen}
         onClose={() => setIsNotesOpen(false)}
-        content={derivedNotesContent}
-        isGenerating={streaming && mode === 'notes'}
+        content={canvasContent}
+        documentId={noteDoc?.documentId ?? null}
+        revision={noteDoc?.revision ?? null}
+        onContentChange={setNoteContent}
+        onSave={handleNoteSave}
+        onUndo={handleNoteUndo}
+        isGenerating={isGeneratingNotes}
+        isAiEditing={isAiEditing}
+        saveState={noteSaveState}
+        onReloadConflict={handleConflictReload}
+        onCopyMyChanges={handleConflictCopyMine}
         subject={subject}
         chapterId={chapterId}
       />
+      </div>
 
       {/* Parental Consent Overlay Modal */}
       {consentState === 'pending' && (

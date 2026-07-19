@@ -93,3 +93,82 @@ export function buildPrompt(
 
   return messages;
 }
+
+// --- Interactive Notes Workspace prompts -----------------------------------
+
+const HIGHLIGHT_CONVENTION = `Highlighting rules (IMPORTANT — never emit raw HTML or style attributes):
+- Inline emphasis: wrap text in double equals, e.g. ==key term==.
+- Block highlight: use a fenced block on its own lines:
+  :::highlight-yellow
+  content
+  :::
+  Allowed colors: highlight-yellow, highlight-green, highlight-blue, highlight-red.
+- Do NOT output <mark>, <span>, style="...", or any HTML. Use only Markdown and the conventions above.`;
+
+const NOTES_STRUCTURE = `Produce structured Markdown with these sections (omit a section only if truly not applicable):
+- ## Overview
+- ## Key Concepts
+- ## Definitions
+- ## Formulas (use LaTeX, e.g. $a^2 + b^2 = c^2$)
+- ## Worked Examples (or a clearly marked source-backed summary)
+- ## Common Mistakes
+- ## Revision Checklist
+- ## Sources (cite NCERT chapter/pages when factual content comes from the provided context)`;
+
+const NOTES_GENERATION_SYSTEM = `You are StudyNotes+, an expert CBSE Class 10 AI Tutor for Math and Science.
+You are generating a student's private study-notes document from NCERT source text.
+Ground all factual content strictly in the provided source text. Do not invent facts, formulas, or examples that are not supported by the source.
+${NOTES_STRUCTURE}
+${HIGHLIGHT_CONVENTION}`;
+
+const NOTES_EDIT_SYSTEM_TRANSFORM = `You are StudyNotes+, editing a student's existing study-notes document.
+The user gives a formatting/organization instruction (e.g. highlight, reorder, shorten, remove).
+Return the COMPLETE updated Markdown document — not a diff, not a fragment.
+Preserve all correct existing content and any existing citations. Do NOT add new factual claims.
+${HIGHLIGHT_CONVENTION}`;
+
+const NOTES_EDIT_SYSTEM_KNOWLEDGE = `You are StudyNotes+, editing a student's existing study-notes document.
+The user asks to add knowledge (examples, definitions, derivations, facts, or exam questions).
+You are given approved NCERT source context. Only add content that is supported by that context, and cite it in a ## Sources section.
+If the context does not support the request, keep the document unchanged except for a short note explaining you could not find supporting NCERT content.
+Return the COMPLETE updated Markdown document — not a diff, not a fragment.
+Preserve all correct existing content and existing citations.
+${HIGHLIGHT_CONVENTION}`;
+
+export function buildNotesGenerationPrompt(
+  subject: 'mathematics' | 'science',
+  chapterNumber: number,
+  chapterTitle: string,
+  chapterText: string
+): { role: 'system' | 'user'; content: string }[] {
+  return [
+    { role: 'system', content: NOTES_GENERATION_SYSTEM },
+    {
+      role: 'user',
+      content: `Subject: ${subject}\nChapter ${chapterNumber}: ${chapterTitle}\n\nNCERT source text:\n\n${chapterText}\n\nTask: Generate the study-notes document now. Maximum ~1200 words.`,
+    },
+  ];
+}
+
+export function buildNotesEditPrompt(
+  documentContent: string,
+  instruction: string,
+  commandClass: 'transform' | 'knowledge',
+  contextText: string
+): { role: 'system' | 'user'; content: string }[] {
+  const system =
+    commandClass === 'knowledge' ? NOTES_EDIT_SYSTEM_KNOWLEDGE : NOTES_EDIT_SYSTEM_TRANSFORM;
+
+  const contextBlock =
+    commandClass === 'knowledge'
+      ? `\n\nApproved NCERT context (only use facts supported here):\n${contextText || '[No approved context was found for this chapter.]'}`
+      : '';
+
+  return [
+    { role: 'system', content: system },
+    {
+      role: 'user',
+      content: `Current document:\n\n${documentContent}\n\nInstruction: ${instruction}${contextBlock}\n\nReturn the complete updated Markdown document.`,
+    },
+  ];
+}
