@@ -1,8 +1,5 @@
-import * as pdf from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import { logger } from './logger';
-
-// @ts-expect-error - pdf-parse has implicit default export
-const pdfParse = pdf.default || pdf;
 
 export type ExtractedPage = {
   pageNumber: number;
@@ -10,43 +7,18 @@ export type ExtractedPage = {
   isImageHeavy: boolean;       // true if text extraction yielded < 100 chars
 };
 
-interface PDFPageData {
-  getTextContent: () => Promise<{
-    items: Array<{
-      transform: number[];
-      str: string;
-    }>;
-  }>;
-}
-
 export async function extractPdf(pdfBuffer: Buffer): Promise<ExtractedPage[]> {
-  // Option to capture pages cleanly
-  const pageTexts: string[] = [];
-  const options = {
-    pagerender: function (pageData: PDFPageData) {
-      return pageData.getTextContent().then(function (textContent) {
-        let lastY: number | undefined;
-        let text = '';
-        for (const item of textContent.items) {
-          if (lastY !== item.transform[5] && lastY !== undefined) {
-            text += '\n';
-          }
-          text += item.str + ' ';
-          lastY = item.transform[5];
-        }
-        pageTexts.push(text);
-        return text;
-      });
-    }
-  };
+  const parser = new PDFParse(new Uint8Array(pdfBuffer));
+  const result = await parser.getText();
 
-  await pdfParse(pdfBuffer, options);
-
-  const pages: ExtractedPage[] = pageTexts.map((text, i) => ({
-    pageNumber: i + 1,
-    text: cleanText(text),
-    isImageHeavy: text.replace(/\s/g, '').length < 100,
-  }));
+  const pages: ExtractedPage[] = result.pages.map((p) => {
+    const text = cleanText(p.text);
+    return {
+      pageNumber: p.num,
+      text,
+      isImageHeavy: text.replace(/\s/g, '').length < 100,
+    };
+  });
 
   // For image-heavy pages: log warning
   const imageHeavy = pages.filter(p => p.isImageHeavy);

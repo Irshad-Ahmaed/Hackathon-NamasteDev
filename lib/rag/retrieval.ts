@@ -55,8 +55,8 @@ export async function retrieveContext(
 
   if (filters?.chapterId) {
     must.push({
-      key: 'chapterId',
-      match: { value: filters.chapterId }
+      key: 'chapterNumber',
+      match: { value: parseInt(filters.chapterId, 10) }
     });
   }
 

@@ -1,0 +1,688 @@
+{
+  "evaluatedAt": "2026-07-19T05:44:05.661Z",
+  "mode": "pilot",
+  "totalQueries": 20,
+  "accuracy": 0.6,
+  "mrr": 0.5166666666666667,
+  "chapterMetrics": {
+    "mathematics-ch1": {
+      "total": 5,
+      "hits": 4
+    },
+    "mathematics-ch2": {
+      "total": 5,
+      "hits": 3
+    },
+    "science-ch1": {
+      "total": 10,
+      "hits": 5
+    }
+  },
+  "weakChapters": [
+    "mathematics-ch1 (80.0% accuracy)",
+    "mathematics-ch2 (60.0% accuracy)",
+    "science-ch1 (50.0% accuracy)"
+  ],
+  "results": [
+    {
+      "questionId": "math-ch1-001",
+      "question": "State the Fundamental Theorem of Arithmetic.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.66793734,
+          "chapterNumber": 1,
+          "pageStart": 3,
+          "contentType": "definition",
+          "excerpt": "t, this statement is true, and is called\nthe Fundamental Theorem of Arithmetic because of its basic crucial importance\nto the study of integers. Let u..."
+        },
+        {
+          "rank": 2,
+          "score": 0.6677238,
+          "chapterNumber": 1,
+          "pageStart": 3,
+          "contentType": "definition",
+          "excerpt": "t, this statement is true, and is called\nthe Fundamental Theorem of Arithmetic because of its basic crucial importance\nto the study of integers. Let u..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5425939,
+          "chapterNumber": 1,
+          "pageStart": 1,
+          "contentType": "text",
+          "excerpt": "Second, we apply this theorem to explore when exactly the decimal\nexpansion of a rational number, say ( 0)\np q\nq  , is terminating and when it is non..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "math-ch1-002",
+      "question": "Prove that square root of 5 is an irrational number.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.5801115,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "following theorem, whose\nproof is based on the Fundamental Theorem of Arithmetic.\nTheorem 1.2 : Let p be a prime number. If p divides a2, then p divid..."
+        },
+        {
+          "rank": 2,
+          "score": 0.58004373,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "following theorem, whose\nproof is based on the Fundamental Theorem of Arithmetic.\nTheorem 1.2 : Let p be a prime number. If p divides a2, then p divid..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5446439,
+          "chapterNumber": 1,
+          "pageStart": 7,
+          "contentType": "text",
+          "excerpt": "(again using Theorem 1.2 with p = 2).\nTherefore, a and b have at least 2 as a common factor.\nBut this contradicts the fact that a and b have no common..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "math-ch1-003",
+      "question": "Explain the relationship between HCF and LCM for any two positive integers a and b.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.6121703,
+          "chapterNumber": 1,
+          "pageStart": 9,
+          "contentType": "text",
+          "excerpt": "here p, q, r are positive integers\n(see Example 8). However, the following results hold good for three numbers\np, q and r :\nLCM (p, q, r) = HCF( , , )..."
+        },
+        {
+          "rank": 2,
+          "score": 0.6121416,
+          "chapterNumber": 1,
+          "pageStart": 9,
+          "contentType": "text",
+          "excerpt": "here p, q, r are positive integers\n(see Example 8). However, the following results hold good for three numbers\np, q and r :\nLCM (p, q, r) = HCF( , , )..."
+        },
+        {
+          "rank": 3,
+          "score": 0.61183506,
+          "chapterNumber": 1,
+          "pageStart": 9,
+          "contentType": "text",
+          "excerpt": "are positive integers\n(see Example 8). However, the following results hold good for three numbers\np, q and r :\nLCM (p, q, r) = HCF( , , )\nHCF( , ) HCF..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "math-ch1-004",
+      "question": "Find the HCF and LCM of 6, 72 and 120 using the prime factorisation method.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.7217293,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "example",
+          "excerpt": "example above, you might have noticed that HCF(6, 20) × LCM(6, 20)\n= 6 × 20. In fact, we can verify that for any two positive integers a and b,\nHCF (a..."
+        },
+        {
+          "rank": 2,
+          "score": 0.72172266,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "example",
+          "excerpt": "example above, you might have noticed that HCF(6, 20) × LCM(6, 20)\n= 6 × 20. In fact, we can verify that for any two positive integers a and b,\nHCF (a..."
+        },
+        {
+          "rank": 3,
+          "score": 0.6110701,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "text",
+          "excerpt": "sed, is unique.\nThe Fundamental Theorem of Arithmetic has many applications, both within\nmathematics and in other fields. Let us look at some examples..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "math-ch1-005",
+      "question": "Why is the product of a non-zero rational and an irrational number always irrational?",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.55455524,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "following theorem, whose\nproof is based on the Fundamental Theorem of Arithmetic.\nTheorem 1.2 : Let p be a prime number. If p divides a2, then p divid..."
+        },
+        {
+          "rank": 2,
+          "score": 0.55451876,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "following theorem, whose\nproof is based on the Fundamental Theorem of Arithmetic.\nTheorem 1.2 : Let p be a prime number. If p divides a2, then p divid..."
+        },
+        {
+          "rank": 3,
+          "score": 0.54995835,
+          "chapterNumber": 1,
+          "pageStart": 7,
+          "contentType": "text",
+          "excerpt": "(again using Theorem 1.2 with p = 2).\nTherefore, a and b have at least 2 as a common factor.\nBut this contradicts the fact that a and b have no common..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 3
+    },
+    {
+      "questionId": "math-ch2-001",
+      "question": "What is the geometrical meaning of the zeroes of a polynomial?",
+      "expectedChapter": 2,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.6663487,
+          "chapterNumber": 2,
+          "pageStart": 2,
+          "contentType": "text",
+          "excerpt": "questions. We will also study the\ndivision algorithm for polynomials.\n2.2 Geometrical Meaning of the Zeroes of a Polynomial\nYou know that a real numbe..."
+        },
+        {
+          "rank": 2,
+          "score": 0.64536846,
+          "chapterNumber": 2,
+          "pageStart": 2,
+          "contentType": "definition",
+          "excerpt": "ct, the most\ngeneral form of a cubic polynomial is\nax3 + bx2 + cx + d,\nwhere, a, b, c, d are real numbers and a  0.\nNow consider the polynomial p(x) ..."
+        },
+        {
+          "rank": 3,
+          "score": 0.6315702,
+          "chapterNumber": 2,
+          "pageStart": 5,
+          "contentType": "text",
+          "excerpt": "A and A are the two zeroes of the quadratic polynomial\nax2 + bx + c in this case (see Fig. 2.3).\nFig. 2.3\nCase (ii) : Here, the graph cuts the x-axis..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "math-ch2-002",
+      "question": "State the relationship between zeroes and coefficients of a quadratic polynomial ax^2 + bx + c.",
+      "expectedChapter": 2,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.73839986,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "at most 3 zeroes.\n5. If  and  are the zeroes of the quadratic polynomial ax2 + bx + c, then\nb\na\n     , c\na\n  .\n6. If , ,  are the zeroes ..."
+        },
+        {
+          "rank": 2,
+          "score": 0.73839986,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "at most 3 zeroes.\n5. If  and  are the zeroes of the quadratic polynomial ax2 + bx + c, then\nb\na\n     , c\na\n  .\n6. If , ,  are the zeroes ..."
+        },
+        {
+          "rank": 3,
+          "score": 0.7358036,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "e\nat most 3 zeroes.\n5. If  and  are the zeroes of the quadratic polynomial ax2 + bx + c, then\nb\na\n     , c\na\n  .\n6. If , ,  are the zeroe..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "math-ch2-003",
+      "question": "Find a quadratic polynomial whose sum and product of zeroes are -3 and 2 respectively.",
+      "expectedChapter": 2,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.6926751,
+          "chapterNumber": 2,
+          "pageStart": 11,
+          "contentType": "text",
+          "excerpt": "zeroes of x2 + 7x + 10 are – 2 and – 5. Now,\nsum of zeroes = 2\n(7) – (Coefficient of ) , – 2 (– 5) – (7) 1 Coefficient of\nx\nx\n\n   \nproduct of zer..."
+        },
+        {
+          "rank": 2,
+          "score": 0.62963265,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "xis.\n4. A quadratic polynomial can have at most 2 zeroes and a cubic polynomial can have\nat most 3 zeroes.\n5. If  and  are the zeroes of the quadrat..."
+        },
+        {
+          "rank": 3,
+          "score": 0.62947756,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "A quadratic polynomial can have at most 2 zeroes and a cubic polynomial can have\nat most 3 zeroes.\n5. If  and  are the zeroes of the quadratic polyn..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "math-ch2-004",
+      "question": "If one zero of the quadratic polynomial is the reciprocal of the other, what is the relation between the constant term and the coefficient of x^2?",
+      "expectedChapter": 2,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.59105575,
+          "chapterNumber": 2,
+          "pageStart": 11,
+          "contentType": "text",
+          "excerpt": "zeroes of x2 + 7x + 10 are – 2 and – 5. Now,\nsum of zeroes = 2\n(7) – (Coefficient of ) , – 2 (– 5) – (7) 1 Coefficient of\nx\nx\n\n   \nproduct of zer..."
+        },
+        {
+          "rank": 2,
+          "score": 0.57170665,
+          "chapterNumber": 2,
+          "pageStart": 2,
+          "contentType": "definition",
+          "excerpt": "ct, the most\ngeneral form of a cubic polynomial is\nax3 + bx2 + cx + d,\nwhere, a, b, c, d are real numbers and a  0.\nNow consider the polynomial p(x) ..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5614708,
+          "chapterNumber": 2,
+          "pageStart": 10,
+          "contentType": "text",
+          "excerpt": ")(x + 2)\nHence, the value of 3x2 + 5x – 2 is zero when either 3x – 1 = 0 or x + 2 = 0, i.e.,\nwhen x = 1\n3 or x = –2. So, the zeroes of 3x2 + 5x – 2 ar..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "math-ch2-005",
+      "question": "Verify that 3, -1, and -1/3 are the zeroes of the cubic polynomial p(x) = 3x^3 - 5x^2 - 11x - 3.",
+      "expectedChapter": 2,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.66529953,
+          "chapterNumber": 2,
+          "pageStart": 12,
+          "contentType": "text",
+          "excerpt": "4 ( 2) 2 2 2 Coefficient of\nx\nx\n  \n      ,\nproduct of the zeroes = 3\n1 8 – Constant term\n4 ( 2) 4\n2 2 Coefficient of x\n\n       .\nHowe..."
+        },
+        {
+          "rank": 2,
+          "score": 0.5886972,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "y = p(x) intersects the x -axis.\n4. A quadratic polynomial can have at most 2 zeroes and a cubic polynomial can have\nat most 3 zeroes.\n5. If  and  a..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5886972,
+          "chapterNumber": 2,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "y = p(x) intersects the x -axis.\n4. A quadratic polynomial can have at most 2 zeroes and a cubic polynomial can have\nat most 3 zeroes.\n5. If  and  a..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "science-ch1-001",
+      "question": "Define a combination reaction and give one example.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.5704887,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "3 Figure 1.3 Figure 1.3 Figure 1.3 Figure 1.3\nFormation of slaked\nlime by the reaction of\ncalcium oxide with\nwater\nCalcium oxide reacts vigorously wit..."
+        },
+        {
+          "rank": 2,
+          "score": 0.49342805,
+          "chapterNumber": 1,
+          "pageStart": 13,
+          "contentType": "text",
+          "excerpt": "ty 1.1 Recall Activity 1.1 Recall Activity 1.1 Recall Activity 1.1, where a magnesium ribbon burns with a dazzling flame in air (oxygen)\nand changes i..."
+        },
+        {
+          "rank": 3,
+          "score": 0.4901421,
+          "chapterNumber": 1,
+          "pageStart": 5,
+          "contentType": "text",
+          "excerpt": "unless\nit is necessary to specify them.\nSometimes the reaction conditions, such as temperature, pressure,\ncatalyst, etc., for the reaction are indicat..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "science-ch1-002",
+      "question": "What is a decomposition reaction? Give thermal and electrolytic examples.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.6064816,
+          "chapterNumber": 1,
+          "pageStart": 8,
+          "contentType": "definition",
+          "excerpt": "e water when heated and the colour\nof the crystals changes. It then decomposes to ferric oxide (Fe2O3),\nsulphur dioxide (SO2) and sulphur trioxide (SO..."
+        },
+        {
+          "rank": 2,
+          "score": 0.5209303,
+          "chapterNumber": 1,
+          "pageStart": 15,
+          "contentType": "text",
+          "excerpt": "ations for the following reactions.\n(a) Calcium hydroxide + Carbon dioxide → Calcium carbonate + Water\n(b) Zinc + Silver nitrate → Zinc nitrate + Silv..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5016868,
+          "chapterNumber": 1,
+          "pageStart": 6,
+          "contentType": "text",
+          "excerpt": "3 Figure 1.3 Figure 1.3 Figure 1.3 Figure 1.3\nFormation of slaked\nlime by the reaction of\ncalcium oxide with\nwater\nCalcium oxide reacts vigorously wit..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "science-ch1-003",
+      "question": "Explain displacement and double displacement reactions with appropriate chemical equations.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.5411226,
+          "chapterNumber": 1,
+          "pageStart": 12,
+          "contentType": "text",
+          "excerpt": "(ii) Write the balanced chemical equation for this reaction.\n(iii) Is this also a double displacement reaction?\nWhat causes this? The white precipitat..."
+        },
+        {
+          "rank": 2,
+          "score": 0.5296348,
+          "chapterNumber": 1,
+          "pageStart": 15,
+          "contentType": "text",
+          "excerpt": "ations for the following reactions.\n(a) Calcium hydroxide + Carbon dioxide → Calcium carbonate + Water\n(b) Zinc + Silver nitrate → Zinc nitrate + Silv..."
+        },
+        {
+          "rank": 3,
+          "score": 0.50791013,
+          "chapterNumber": 1,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "d is getting reduced.\n(b) Carbon dioxide is getting oxidised.\n(c) Carbon is getting oxidised.\n(d) Lead oxide is getting reduced.\n(i) (a) and (b)\n(ii) ..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 2
+    },
+    {
+      "questionId": "science-ch1-004",
+      "question": "Define oxidation and reduction in terms of gain or loss of oxygen.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.4667413,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "example",
+          "excerpt": "examples each.\n(a) Oxidation\n(b) Reduction\n17. A shiny brown coloured element ‘X’ on heating in air becomes black in colour.\nName the element ‘X’ and ..."
+        },
+        {
+          "rank": 2,
+          "score": 0.4667413,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "example",
+          "excerpt": "examples each.\n(a) Oxidation\n(b) Reduction\n17. A shiny brown coloured element ‘X’ on heating in air becomes black in colour.\nName the element ‘X’ and ..."
+        },
+        {
+          "rank": 3,
+          "score": 0.4656617,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": "Oxidation\n(b) Reduction\n17. A shiny brown coloured element ‘X’ on heating in air becomes black in colour.\nName the element ‘X’ and the black coloured ..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "science-ch1-005",
+      "question": "How do you balance a chemical equation? Explain using the step-by-step hit-and-trial method.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.60818464,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "definition",
+          "excerpt": "on)\nReprint 2026-27 Chemical Reactions and Equations 5\nTo equalise Fe, we take three atoms of Fe on the LHS.\n3 Fe + 4 H2O → Fe3O4 + 4 H2 (1.8)\nStep VI..."
+        },
+        {
+          "rank": 2,
+          "score": 0.59777933,
+          "chapterNumber": 1,
+          "pageStart": 3,
+          "contentType": "text",
+          "excerpt": "unbalanced because the mass is not the same on\nboth sides of the equation. Such a chemical equation is a skeletal\nchemical equation for a reaction. Eq..."
+        },
+        {
+          "rank": 3,
+          "score": 0.56285477,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "text",
+          "excerpt": "xes while balancing the\nequation.\nFe + H2O → Fe3O4 + H2 (1.5)\nStep II: List the number of atoms of different elements present in the\nunbalanced equati..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "science-ch1-006",
+      "question": "Explain the term Rancidity and how it can be prevented.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.5441148,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": "xplain the following terms with one example each.\n(a) Corrosion\n(b) Rancidity\nReprint 2026-27..."
+        },
+        {
+          "rank": 2,
+          "score": 0.5413407,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": "plain the following terms with one example each.\n(a) Corrosion\n(b) Rancidity\nReprint 2026-27..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5367857,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": "erms with one example each.\n(a) Corrosion\n(b) Rancidity\nReprint 2026-27..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "science-ch1-007",
+      "question": "What is corrosion? Explain the rusting of iron and how it harms metallic structures.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.48752952,
+          "chapterNumber": 1,
+          "pageStart": 13,
+          "contentType": "definition",
+          "excerpt": "ONS IN EVERYD CTIONS IN EVERYDA A A A AY LIFE? Y LIFE? Y LIFE? Y LIFE? Y LIFE?\n1.3.1 Corrosion\nYou must have observed that iron articles are shiny whe..."
+        },
+        {
+          "rank": 2,
+          "score": 0.47844872,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": ". Explain the following terms with one example each.\n(a) Corrosion\n(b) Rancidity\nReprint 2026-27..."
+        },
+        {
+          "rank": 3,
+          "score": 0.47715777,
+          "chapterNumber": 1,
+          "pageStart": 16,
+          "contentType": "text",
+          "excerpt": "Explain the following terms with one example each.\n(a) Corrosion\n(b) Rancidity\nReprint 2026-27..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    },
+    {
+      "questionId": "science-ch1-008",
+      "question": "Why is respiration considered an exothermic reaction?",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.49784747,
+          "chapterNumber": 5,
+          "pageStart": 10,
+          "contentType": "text",
+          "excerpt": "obic\nrespiration. The release of energy in this aerobic process is a lot greater\nthan in the anaerobic process. Sometimes, when there is a lack of oxy..."
+        },
+        {
+          "rank": 2,
+          "score": 0.42770714,
+          "chapterNumber": 1,
+          "pageStart": 7,
+          "contentType": "text",
+          "excerpt": ".16)\nIn simple language we can say that when two or more substances\n(elements or compounds) combine to form a single product, the reactions\nare called..."
+        },
+        {
+          "rank": 3,
+          "score": 0.39606214,
+          "chapterNumber": 1,
+          "pageStart": 15,
+          "contentType": "text",
+          "excerpt": "ations for the following reactions.\n(a) Calcium hydroxide + Carbon dioxide → Calcium carbonate + Water\n(b) Zinc + Silver nitrate → Zinc nitrate + Silv..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 2
+    },
+    {
+      "questionId": "science-ch1-009",
+      "question": "Write balanced chemical equations for the reaction of iron with steam.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.5765928,
+          "chapterNumber": 1,
+          "pageStart": 4,
+          "contentType": "definition",
+          "excerpt": "on)\nReprint 2026-27 Chemical Reactions and Equations 5\nTo equalise Fe, we take three atoms of Fe on the LHS.\n3 Fe + 4 H2O → Fe3O4 + 4 H2 (1.8)\nStep VI..."
+        },
+        {
+          "rank": 2,
+          "score": 0.5618406,
+          "chapterNumber": 1,
+          "pageStart": 5,
+          "contentType": "text",
+          "excerpt": "unless\nit is necessary to specify them.\nSometimes the reaction conditions, such as temperature, pressure,\ncatalyst, etc., for the reaction are indicat..."
+        },
+        {
+          "rank": 3,
+          "score": 0.5404682,
+          "chapterNumber": 1,
+          "pageStart": 14,
+          "contentType": "text",
+          "excerpt": "d is getting reduced.\n(b) Carbon dioxide is getting oxidised.\n(c) Carbon is getting oxidised.\n(d) Lead oxide is getting reduced.\n(i) (a) and (b)\n(ii) ..."
+        }
+      ],
+      "hit": false,
+      "hitRank": null
+    },
+    {
+      "questionId": "science-ch1-010",
+      "question": "What happens when magnesium ribbon burns in oxygen? Write the balanced equation and observation.",
+      "expectedChapter": 1,
+      "retrieved": [
+        {
+          "rank": 1,
+          "score": 0.6710022,
+          "chapterNumber": 1,
+          "pageStart": 2,
+          "contentType": "text",
+          "excerpt": "on.\nThe word-equation for the above reaction would be –\nMagnesium + Oxygen → Magnesium oxide (1.1)\n(Reactants) (Product)\nThe substances that undergo c..."
+        },
+        {
+          "rank": 2,
+          "score": 0.58859694,
+          "chapterNumber": 1,
+          "pageStart": 2,
+          "contentType": "text",
+          "excerpt": "Activity 1.2 Activity 1.2 Activity 1.2\nFigure 1.2 Figure 1.2 Figure 1.2 Figure 1.2 Figure 1.2\nFormation of hydrogen\ngas by the action of\ndilute sulphu..."
+        },
+        {
+          "rank": 3,
+          "score": 0.546988,
+          "chapterNumber": 1,
+          "pageStart": 13,
+          "contentType": "definition",
+          "excerpt": "ONS IN EVERYD CTIONS IN EVERYDA A A A AY LIFE? Y LIFE? Y LIFE? Y LIFE? Y LIFE?\n1.3.1 Corrosion\nYou must have observed that iron articles are shiny whe..."
+        }
+      ],
+      "hit": true,
+      "hitRank": 1
+    }
+  ]
+}

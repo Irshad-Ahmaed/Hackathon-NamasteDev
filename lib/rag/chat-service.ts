@@ -1,11 +1,11 @@
-import { openai, models } from '../openai';
-import { moderateInput, ModeratedStreamBuffer, DistressSignalError } from '../moderation';
+import { models, createStreamingChatCompletion } from '../openai';
+import { moderateInput, ModeratedStreamBuffer } from '../moderation';
 import { reformulateQuery } from './reformulate';
 import { retrieveContext, buildCitations, RetrievalResult } from './retrieval';
 import { buildPrompt } from './prompt';
 import { ChatRequest, CitationMetadata, detectPromptInjection } from '../schemas';
 import { saveMessage, fetchHistory, createConversation } from '../../server/conversation-service';
-import { AppError, SAFE_ESCALATION_MESSAGE } from '../errors';
+import { AppError, SAFE_ESCALATION_MESSAGE, DistressError } from '../errors';
 import crypto from 'crypto';
 
 export interface ChatServiceOptions {
@@ -28,7 +28,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   try {
     await moderateInput(message);
   } catch (error) {
-    if (error instanceof DistressSignalError) {
+    if (error instanceof DistressError) {
       // Short circuit and return a distress response as stream
       return createStaticStream(SAFE_ESCALATION_MESSAGE, conversationId || 'new');
     }
@@ -72,7 +72,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
     // 7. Evaluate Retrieval Confidence (Basic Thresholding)
     topScore = contextResults[0]?.score || 0;
-    if (topScore < 0.2) {
+    if (topScore < 0.35) {
       // Low confidence -> Fallback
       const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
       const assistantMessageId = crypto.randomUUID();
@@ -92,11 +92,9 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
   // 8. Build Prompt & LLM Call
   const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat);
-  const openaiClient = openai;
-  
   const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
   
-  const stream = await openaiClient.chat.completions.create({
+  const stream = await createStreamingChatCompletion({
     model: selectedModel,
     messages: promptMessages,
     stream: true,
