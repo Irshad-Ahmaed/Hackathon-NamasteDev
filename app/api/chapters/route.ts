@@ -8,7 +8,7 @@ export async function GET() {
     const rows = (await sql`
       SELECT subject, title, chapter_number
       FROM ingestion_sources 
-      WHERE status = 'verified'
+      WHERE status = 'live'
     `) as unknown as Array<{ subject: string; title: string; chapter_number: number | null }>;
     
     const chapters: Record<string, number[]> = {

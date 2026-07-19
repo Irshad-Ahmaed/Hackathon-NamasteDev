@@ -17,14 +17,17 @@ export const ChatRequestSchema = z.object({
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
-// Explicitly reject anything that looks like a system prompt injection.
 export function detectPromptInjection(message: string): boolean {
   const injectionPatterns = [
-    /ignore previous instructions/i,
+    /ignore.*instructions/i,
     /you are now/i,
     /system:/i,
     /\[INST\]/i,
-    /OPENAI_API_KEY/i,
+    /api_key/i,
+    /api key/i,
+    /context window/i,
+    /disregard/i,
+    /system prompt/i,
   ];
   return injectionPatterns.some(p => p.test(message));
 }

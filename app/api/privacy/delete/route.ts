@@ -16,8 +16,7 @@ export async function DELETE() {
   const userId = user[0].id;
 
   try {
-    // Transactional request state & job insertion using CTE over stateless HTTP
-    await sql`
+    const result = (await sql`
       WITH user_update AS (
         UPDATE users 
         SET deletion_requested_at = now() 
@@ -28,7 +27,12 @@ export async function DELETE() {
       SELECT id, ${clerkId} FROM user_update
       ON CONFLICT (user_id) DO UPDATE 
       SET status = 'pending', attempts = 0, updated_at = now()
-    `;
+      RETURNING id
+    `) as unknown as Array<{ id: string }>;
+
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
 
     logger.info({ event: 'account_deletion_queued', clerkIdHash });
     return NextResponse.json({ 

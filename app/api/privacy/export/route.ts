@@ -9,8 +9,8 @@ export async function GET() {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
 
-  const user = (await sql`SELECT id, email FROM users WHERE clerk_id = ${clerkId}`) as unknown as Array<{ id: string; email: string }>;
-  if (!user.length) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  const user = (await sql`SELECT id, email FROM users WHERE clerk_id = ${clerkId} AND deletion_requested_at IS NULL`) as unknown as Array<{ id: string; email: string }>;
+  if (!user.length) return NextResponse.json({ error: 'User not found or account pending deletion' }, { status: 404 });
   const userId = user[0].id;
 
   const conversations = (await sql`

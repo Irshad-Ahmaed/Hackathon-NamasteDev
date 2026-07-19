@@ -1,4 +1,4 @@
-import { models, createStreamingChatCompletion } from '../openai';
+import { models, createStreamingChatCompletion, estimateCostUsd } from '../openai';
 import { moderateInput, ModeratedStreamBuffer } from '../moderation';
 import { reformulateQuery } from './reformulate';
 import { retrieveContext, buildCitations, RetrievalResult } from './retrieval';
@@ -6,16 +6,20 @@ import { buildPrompt } from './prompt';
 import { ChatRequest, CitationMetadata, detectPromptInjection } from '../schemas';
 import { saveMessage, fetchHistory, createConversation } from '../../server/conversation-service';
 import { AppError, SAFE_ESCALATION_MESSAGE, DistressError } from '../errors';
+import { logger } from '../logger';
+import { sql } from '../db';
 import crypto from 'crypto';
 
 export interface ChatServiceOptions {
   userId: string;
   tenantId: string;
   request: ChatRequest;
+  requestId: string;
+  startTime: number;
 }
 
 export async function executeChatPipeline(options: ChatServiceOptions): Promise<ReadableStream> {
-  const { userId, tenantId, request } = options;
+  const { userId, tenantId, request, requestId, startTime } = options;
   const { message, subject, language, conversationId: reqConversationId, chapterId, mode } = request;
   let conversationId = reqConversationId;
 
@@ -65,6 +69,8 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   // Bypass if the user explicitly chose General Chat, OR if reformulation classified it as chitchat
   const bypassRAG = isGeneralChat || category === 'chitchat';
 
+  const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
+
   if (!bypassRAG) {
     // 6. Retrieve Context (with filters!)
     contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
@@ -76,29 +82,67 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
       // Low confidence -> Fallback
       const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
       const assistantMessageId = crypto.randomUUID();
+      const promptTokens = Math.ceil(standaloneQuery.length / 4) + 100;
+      const completionTokens = Math.ceil(fallbackText.length / 4);
+      const cost = estimateCostUsd(selectedModel, promptTokens, completionTokens);
+
       await saveMessage(conversationId, 'assistant', fallbackText, userId, tenantId, { 
         id: assistantMessageId,
         subject, 
         mode: isGeneralChat ? undefined : mode, 
         outcome: 'low_confidence', 
         retrievalTopScore: topScore, 
-        retrievedChunkCount: 0 
+        retrievedChunkCount: 0,
+        model: selectedModel,
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        estimatedCostUsd: cost
       });
+
+      // Log low confidence refutation
+      const userIdHash = crypto.createHash('sha256').update(userId).digest('hex');
+      logger.info({
+        requestId,
+        userIdHash,
+        route: '/api/chat',
+        subject,
+        chapterId,
+        mode,
+        statusCode: 200,
+        durationMs: Date.now() - startTime,
+        retrievalTopScore: topScore,
+        retrievedChunkCount: 0,
+        model: selectedModel,
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        estimatedCostUsd: cost,
+        outcome: 'low_confidence',
+      }, 'chat_request_complete');
+
+      // Insert event into DB
+      await sql`
+        INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
+        VALUES (${userIdHash}, 'chat_message', ${subject}, ${chapterId || null}, ${mode}, 'low_confidence', ${Date.now() - startTime}, ${cost})
+      `;
+
       return createStaticStream(fallbackText, conversationId, citations, 'refusal', assistantMessageId);
     }
   }
 
-  const assistantMessageId = crypto.randomUUID();
+  // Use the provided requestId for the assistant message
+  const assistantMessageId = requestId || crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
   const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat);
-  const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
+
   
   const stream = await createStreamingChatCompletion({
     model: selectedModel,
     messages: promptMessages,
     stream: true,
+    stream_options: { include_usage: true },
   });
+
 
   // 9. Stream Response & Apply Output Moderation Buffer
   return new ReadableStream({
@@ -128,14 +172,25 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
         450 // Buffer size
       );
 
+      let promptTokens = 0;
+      let completionTokens = 0;
+
       try {
         for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || '';
+          if (chunk.usage) {
+            promptTokens = chunk.usage.prompt_tokens;
+            completionTokens = chunk.usage.completion_tokens;
+          }
+          const content = chunk.choices?.[0]?.delta?.content || '';
           if (content) {
             await moderationBuffer.addChunk(content);
           }
         }
         await moderationBuffer.flush();
+
+        const finalPromptTokens = promptTokens || (Math.ceil(standaloneQuery.length / 4) + 500);
+        const finalCompletionTokens = completionTokens || Math.ceil(fullResponse.length / 4);
+        const finalCost = estimateCostUsd(selectedModel, finalPromptTokens, finalCompletionTokens);
 
         // 10. Save assistant message after stream completes
         await saveMessage(conversationId!, 'assistant', fullResponse, userId, tenantId, {
@@ -145,12 +200,69 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
            outcome: 'success', 
            retrievalTopScore: topScore, 
            retrievedChunkCount: contextResults.length, 
-           model: selectedModel
+           model: selectedModel,
+           inputTokens: finalPromptTokens,
+           outputTokens: finalCompletionTokens,
+           estimatedCostUsd: finalCost
         });
-      } catch (err) {
+
+        // Structured Logging on Success
+        const userIdHash = crypto.createHash('sha256').update(userId).digest('hex');
+        logger.info({
+          requestId,
+          userIdHash,
+          route: '/api/chat',
+          subject,
+          chapterId,
+          mode,
+          statusCode: 200,
+          durationMs: Date.now() - startTime,
+          retrievalTopScore: topScore,
+          retrievedChunkCount: contextResults.length,
+          model: selectedModel,
+          inputTokens: finalPromptTokens,
+          outputTokens: finalCompletionTokens,
+          estimatedCostUsd: finalCost,
+          outcome: 'success',
+        }, 'chat_request_complete');
+
+        // Insert event into DB
+        await sql`
+          INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
+          VALUES (${userIdHash}, 'chat_message', ${subject}, ${chapterId || null}, ${mode}, 'success', ${Date.now() - startTime}, ${finalCost})
+        `;
+
+      } catch (err: unknown) {
         console.error('Streaming error:', err);
         const errorEvent = JSON.stringify({ type: 'error', message: 'Streaming failed', code: 'STREAM_ERROR' });
         controller.enqueue(`data: ${errorEvent}\n\n`);
+
+        const userIdHash = crypto.createHash('sha256').update(userId).digest('hex');
+        logger.error({
+          requestId,
+          userIdHash,
+          route: '/api/chat',
+          subject,
+          chapterId,
+          mode,
+          statusCode: 500,
+          durationMs: Date.now() - startTime,
+          retrievalTopScore: topScore,
+          retrievedChunkCount: contextResults.length,
+          model: selectedModel,
+          outcome: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        }, 'chat_request_complete');
+
+        // Insert failure event into DB
+        try {
+          await sql`
+            INSERT INTO events (user_id_hash, event_type, subject, chapter_id, mode, outcome, duration_ms, estimated_cost_usd)
+            VALUES (${userIdHash}, 'chat_message_failed', ${subject}, ${chapterId || null}, ${mode}, 'error', ${Date.now() - startTime}, 0)
+          `;
+        } catch (dbErr) {
+          console.error('Failed to log error event to DB:', dbErr);
+        }
       } finally {
         controller.close();
       }
