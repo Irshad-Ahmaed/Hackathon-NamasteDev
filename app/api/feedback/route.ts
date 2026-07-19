@@ -50,18 +50,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message not found or access denied' }, { status: 404 });
     }
 
-    // Insert feedback — ON CONFLICT DO NOTHING prevents duplicate (message_id, user_id, type) rows.
-    // The result array will be empty if the feedback was already submitted.
-    const inserted = (await sql`
-      INSERT INTO feedback (message_id, user_id, type)
-      VALUES (${messageId}, ${userId}, ${type})
-      ON CONFLICT (message_id, user_id, type) DO NOTHING
-      RETURNING id
+    // Check if feedback already exists to prevent duplicates (sidesteps missing ON CONFLICT constraint errors)
+    const existing = (await sql`
+      SELECT id FROM feedback 
+      WHERE message_id = ${messageId} AND user_id = ${userId} AND type = ${type}
     `) as unknown as Array<{ id: string }>;
 
-    if (inserted.length === 0) {
+    if (existing.length > 0) {
       return NextResponse.json({ error: 'Feedback already submitted for this message' }, { status: 409 });
     }
+
+    await sql`
+      INSERT INTO feedback (message_id, user_id, type)
+      VALUES (${messageId}, ${userId}, ${type})
+      RETURNING id
+    `;
 
     logger.info({ event: 'feedback_submitted', clerkIdHash, messageId, type });
 

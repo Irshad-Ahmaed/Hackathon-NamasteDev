@@ -13,10 +13,10 @@ import { NotesCanvas } from '@/components/NotesCanvas';
 import { UserButton } from '@clerk/nextjs';
 
 const mathPlugin = createMathPlugin({ singleDollarTextMath: true });
- 
+
 // Message component wrapped in React.memo to prevent re-rendering historical messages
-const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: { 
-  message: Message; 
+const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: {
+  message: Message;
   onFeedback?: (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => void;
   feedbackStatus?: string;
 }) => {
@@ -51,23 +51,26 @@ const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: {
       )}
       {message.role === 'assistant' && !message.streaming && onFeedback && (
         <div className="mt-3 pt-2 border-t border-border/50 flex flex-wrap items-center gap-4 text-xs">
-          <button 
+          <button
             onClick={() => onFeedback(message.id, 'helpful')}
-            className="hover:text-blue-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+            title="Helpful"
+            className="hover:text-blue-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
           >
-            👍 Helpful
+            👍
           </button>
-          <button 
+          <button
             onClick={() => onFeedback(message.id, 'incorrect')}
-            className="hover:text-amber-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+            title="This is incorrect"
+            className="hover:text-amber-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
           >
-            👎 This is incorrect
+            👎
           </button>
-          <button 
+          <button
             onClick={() => onFeedback(message.id, 'inappropriate')}
-            className="hover:text-red-500 transition-colors text-slate-500 font-medium flex items-center gap-1 cursor-pointer"
+            title="Report answer"
+            className="hover:text-red-500 transition-colors text-slate-500 font-medium flex items-center cursor-pointer text-lg"
           >
-            🚩 Report answer
+            🚩
           </button>
           {feedbackStatus && (
             <span className="text-slate-400 font-normal italic ml-auto">{feedbackStatus}</span>
@@ -120,7 +123,7 @@ export default function ChatPage() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
   const [availableChapters, setAvailableChapters] = useState<{ mathematics: number[], science: number[] }>({ mathematics: [], science: [] });
-  
+
   // Parental consent states
   const [consentState, setConsentState] = useState<'pending' | 'given' | 'loading'>('loading');
   const [parentEmail, setParentEmail] = useState('');
@@ -185,9 +188,9 @@ export default function ChatPage() {
         body: JSON.stringify({ messageId, type })
       });
       if (res.ok) {
-        setFeedbackStatus(prev => ({ 
-          ...prev, 
-          [messageId]: `Feedback submitted: ${type === 'helpful' ? 'Helpful' : type === 'incorrect' ? 'Incorrect' : 'Reported'}` 
+        setFeedbackStatus(prev => ({
+          ...prev,
+          [messageId]: `Feedback submitted: ${type === 'helpful' ? 'Helpful' : type === 'incorrect' ? 'Incorrect' : 'Reported'}`
         }));
       } else {
         const err = await res.json().catch(() => ({}));
@@ -197,20 +200,20 @@ export default function ChatPage() {
       setFeedbackStatus(prev => ({ ...prev, [messageId]: 'Network error. Please try again.' }));
     }
   }, []);
-  
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (streaming || !inputText.trim()) return;
-    
+
     // If asking for notes, open the canvas and let the chat display it there
     if (mode === 'notes') {
       setIsNotesOpen(true);
     }
-    
+
     sendMessage(inputText, { mode });
     setInputText('');
   };
-  
+
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
 
   // Derive notes content only when in 'notes' mode — avoids showing quiz/explain answers in the Notes Canvas.
@@ -235,24 +238,27 @@ export default function ChatPage() {
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px] mix-blend-screen opacity-70 animate-[pulse_10s_infinite_alternate]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full bg-blue-500/5 blur-[100px] mix-blend-screen opacity-60 animate-[pulse_12s_infinite_alternate]" />
-        
+
+        {/* Center Whitish Fog */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[60%] rounded-full bg-white/10 dark:bg-white/[0.04] blur-[130px] mix-blend-overlay" />
+
         {/* Dotted Grid Pattern */}
-        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{
+        <div className="absolute inset-0 opacity-[0.12] dark:opacity-[0.22]" style={{
           backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
           backgroundSize: '24px 24px'
         }} />
       </div>
 
       {/* Header */}
-      <header className="flex-none flex items-center justify-between p-4 border-b border-white/5 bg-background/40 backdrop-blur-md z-20">
+      <header className="absolute top-4 left-1/2 -translate-x-1/2 w-[90%] md:w-[80%] flex items-center justify-between px-6 md:px-8 h-16 rounded-full border border-white/10 bg-background/60 backdrop-blur-md shadow-2xl z-50">
         <div className="font-bold text-xl flex items-center gap-2 whitespace-nowrap">
           <span className="text-primary">✦</span> StudyNotes+
         </div>
-        
+
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => setIsNotesOpen(true)}
-            className="px-4 py-2 bg-secondary text-secondary-foreground text-sm font-medium rounded-full hover:bg-secondary/80 transition-colors shadow-sm whitespace-nowrap"
+            className="px-4 cursor-pointer hover:bg-white/10 hover:text-primary-foreground py-2 bg-secondary text-secondary-foreground text-sm font-medium rounded-full hover:bg-secondary/80 transition-colors shadow-sm whitespace-nowrap"
           >
             Notes Canvas
           </button>
@@ -261,7 +267,7 @@ export default function ChatPage() {
       </header>
 
       {/* Main Chat Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col gap-2 relative z-10">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pt-28 md:pt-32 flex flex-col gap-2 relative z-10">
         {messages.length === 0 ? (
           <div className="m-auto text-center space-y-4 max-w-lg">
             <div className="text-4xl">👋</div>
@@ -272,11 +278,11 @@ export default function ChatPage() {
           </div>
         ) : (
           messages.map((msg) => (
-            <ChatMessage 
-              key={msg.id} 
-              message={msg} 
-              onFeedback={handleFeedback} 
-              feedbackStatus={feedbackStatus[msg.id]} 
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              onFeedback={handleFeedback}
+              feedbackStatus={feedbackStatus[msg.id]}
             />
           ))
         )}
@@ -297,22 +303,28 @@ export default function ChatPage() {
                 className="flex-1 p-3 rounded-xl border-none bg-secondary/50 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm md:text-base transition-all"
                 disabled={streaming}
               />
-              
+
               {streaming ? (
                 <button
                   type="button"
                   onClick={cancel}
-                  className="px-5 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold rounded-xl shadow transition-colors flex items-center justify-center"
+                  title="Stop generating"
+                  className="p-3 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold rounded-xl shadow transition-colors flex items-center justify-center cursor-pointer aspect-square"
                 >
-                  Stop
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path fillRule="evenodd" d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z" clipRule="evenodd" />
+                  </svg>
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={!inputText.trim()}
-                  className="px-6 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl shadow disabled:opacity-40 transition-all flex items-center justify-center"
+                  title="Send message"
+                  className="p-3 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl shadow disabled:opacity-40 transition-all flex items-center justify-center cursor-pointer aspect-square"
                 >
-                  Send
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -320,7 +332,7 @@ export default function ChatPage() {
             {/* Integrated Controls Row */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5 text-xs text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
-                
+
                 {/* General Chat mode badge — shown instead of Subject/Chapter selectors */}
                 {mode === 'general' ? (
                   <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/30 text-violet-300 font-medium text-xs">
@@ -330,8 +342,8 @@ export default function ChatPage() {
                 ) : (
                   <>
                     {/* Subject Selector */}
-                    <select 
-                      value={subject} 
+                    <select
+                      value={subject}
                       onChange={(e) => {
                         setSubject(e.target.value as Subject);
                         setChapterId(undefined);
@@ -357,10 +369,10 @@ export default function ChatPage() {
                     </select>
                   </>
                 )}
-                
+
                 {/* Learning Mode Selector */}
-                <select 
-                  value={mode} 
+                <select
+                  value={mode}
                   onChange={(e) => setMode(e.target.value as Mode)}
                   className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors"
                 >
@@ -379,12 +391,12 @@ export default function ChatPage() {
           </form>
         </div>
       </footer>
-      
+
       {/* Notes Canvas Overlay */}
-      <NotesCanvas 
-        isOpen={isNotesOpen} 
-        onClose={() => setIsNotesOpen(false)} 
-        content={derivedNotesContent} 
+      <NotesCanvas
+        isOpen={isNotesOpen}
+        onClose={() => setIsNotesOpen(false)}
+        content={derivedNotesContent}
         isGenerating={streaming && mode === 'notes'}
         subject={subject}
         chapterId={chapterId}
@@ -401,7 +413,7 @@ export default function ChatPage() {
                 To comply with child privacy regulations, we require a parent/guardian&apos;s email and consent before you start studying.
               </p>
             </div>
-            
+
             <form onSubmit={handleConsentSubmit} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

@@ -123,9 +123,9 @@ describe('Feedback API - POST Submission', () => {
         // message ownership check
         return [{ id: 'msg_1' }];
       }
-      if (strings[0].includes('INSERT INTO feedback')) {
-        // Simulates ON CONFLICT DO NOTHING returning 0 rows
-        return [];
+      if (strings[0].includes('SELECT id FROM feedback')) {
+        // Simulates feedback already existing to trigger 409
+        return [{ id: 'existing_feedback_1' }];
       }
       return [];
     }) as any);
