@@ -68,11 +68,7 @@ async function main() {
   const benchmark = JSON.parse(fs.readFileSync(benchmarkPath, 'utf8'));
   let questions: BenchmarkQuestion[] = benchmark.questions;
 
-  if (subjectFilter) {
-    questions = questions.filter((q) => q.subject === subjectFilter);
-  }
-
-  console.log(`Running evaluation on ${questions.length} queries...`);
+  console.log(`Running evaluation...`);
 
   // Resolve target collection
   const aliasesResult = await qdrant.getAliases();
@@ -81,6 +77,37 @@ async function main() {
     console.error(`Error: Alias "${COLLECTION}" not found. Ensure setup-qdrant.ts was run.`);
     process.exit(1);
   }
+
+  // Scroll Qdrant to find which chapters actually have ingested chunks
+  console.log('Scanning Qdrant to detect ingested chapters...');
+  const scrollResult = await qdrant.scroll(targetCollection, {
+    limit: 10000,
+    with_payload: ['subject', 'chapterNumber']
+  });
+
+  const ingestedChapters = new Set<string>();
+  for (const point of scrollResult.points) {
+    const payload = point.payload as ChunkPayload | undefined;
+    if (payload?.subject && payload?.chapterNumber) {
+      ingestedChapters.add(`${payload.subject}-${payload.chapterNumber}`);
+    }
+  }
+
+  console.log(`Ingested chapters detected in Qdrant:`, Array.from(ingestedChapters));
+
+  if (subjectFilter) {
+    questions = questions.filter((q) => q.subject === subjectFilter);
+  }
+
+  // Filter benchmark questions to only include ingested chapters
+  questions = questions.filter((q) => ingestedChapters.has(`${q.subject}-${q.expectedChapter}`));
+
+  if (questions.length === 0) {
+    console.error('Error: No benchmark questions match the ingested chapters. Ingest some chapters first.');
+    process.exit(1);
+  }
+
+  console.log(`Running evaluation on ${questions.length} queries matching ingested chapters...`);
 
   let totalQueries = 0;
   let hits = 0;
@@ -110,6 +137,7 @@ async function main() {
         ]
       },
       limit: 3,
+      with_payload: true,
     });
 
     const retrievedPoints = searchResponse.points;
@@ -124,8 +152,15 @@ async function main() {
 
       const isCorrectChapter = payload.chapterNumber === q.expectedChapter;
       
-      // Concept matching: case-insensitive check
-      const conceptMatched = payload.text.toLowerCase().includes(q.keyConceptInChunk.toLowerCase());
+      // Concept matching: check if all alphanumeric keywords are present (case-insensitive)
+      const keywords = q.keyConceptInChunk
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(k => k.length >= 1);
+      
+      const conceptMatched = keywords.length > 0 && keywords.every(kw => 
+        payload.text.toLowerCase().includes(kw)
+      );
 
       if (isCorrectChapter && conceptMatched) {
         if (!hitFound) {

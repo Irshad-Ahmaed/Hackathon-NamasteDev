@@ -26,7 +26,7 @@ export const models = {
 
 // Chat completion wrapper with basic backoff retry
 export async function createChatCompletion(
-  params: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+  params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
   attempt: number = 0
 ) {
   try {
@@ -41,6 +41,13 @@ export async function createChatCompletion(
     }
     throw err;
   }
+}
+
+// Streaming cannot be retried mid-stream — use a direct call instead
+export async function createStreamingChatCompletion(
+  params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
+) {
+  return openai.chat.completions.create(params);
 }
 
 // Token cost estimator

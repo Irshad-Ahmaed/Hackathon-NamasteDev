@@ -7,19 +7,7 @@ const DISTRESS_CATEGORIES = [
   'self-harm/instructions',
 ];
 
-export class DistressSignalError extends Error {
-  constructor(message: string = 'Distress or self-harm signal detected.') {
-    super(message);
-    this.name = 'DistressSignalError';
-  }
-}
-
-export class ModerationError extends Error {
-  constructor(message: string = 'Input violates safety guidelines.') {
-    super(message);
-    this.name = 'ModerationError';
-  }
-}
+import { DistressError, ModerationError } from './errors';
 
 /**
  * Checks input text for moderation violations.
@@ -43,7 +31,7 @@ export async function moderateInput(text: string): Promise<void> {
       // Check for distress first
       for (const category of DISTRESS_CATEGORIES) {
         if (result.categories[category as keyof typeof result.categories]) {
-          throw new DistressSignalError();
+          throw new DistressError();
         }
       }
       
@@ -51,7 +39,7 @@ export async function moderateInput(text: string): Promise<void> {
       throw new ModerationError();
     }
   } catch (error) {
-    if (error instanceof DistressSignalError || error instanceof ModerationError) {
+    if (error instanceof DistressError || error instanceof ModerationError) {
       throw error;
     }
     console.error('[moderation] Moderation API error:', error);
@@ -99,7 +87,7 @@ export class ModeratedStreamBuffer {
       this.onFlush(this.buffer);
       this.buffer = ''; 
     } catch (error) {
-      if (error instanceof DistressSignalError || error instanceof ModerationError) {
+      if (error instanceof DistressError || error instanceof ModerationError) {
          // Redact block
          this.onFlush('\n\n[Content redacted for safety policy violations.]');
          this.buffer = '';

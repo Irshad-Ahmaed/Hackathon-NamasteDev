@@ -22,9 +22,10 @@ export async function DELETE() {
         UPDATE users 
         SET deletion_requested_at = now() 
         WHERE id = ${userId}
+        RETURNING id
       )
       INSERT INTO deletion_jobs (user_id, clerk_id)
-      VALUES (${userId}, ${clerkId})
+      SELECT id, ${clerkId} FROM user_update
       ON CONFLICT (user_id) DO UPDATE 
       SET status = 'pending', attempts = 0, updated_at = now()
     `;

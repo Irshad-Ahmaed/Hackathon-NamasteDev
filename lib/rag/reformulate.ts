@@ -1,4 +1,4 @@
-import { openai } from '../openai';
+import { models, createChatCompletion } from '../openai';
 import { ChatMessage } from '../schemas';
 
 const REFORMULATION_PROMPT = `You are a query analysis assistant for StudyNotes+, a CBSE Class 10 AI Tutor platform.
@@ -22,12 +22,11 @@ export interface ReformulatedResponse {
 }
 
 export async function reformulateQuery(messages: ChatMessage[], newQuery: string): Promise<ReformulatedResponse> {
-  const openaiClient = openai;
   const contextMessages = (messages || []).map(m => `${m.role}: ${m.content}`).join('\n');
   
   try {
-    const response = await openaiClient.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const response = await createChatCompletion({
+      model: models.chat,
       messages: [
         { role: 'system', content: REFORMULATION_PROMPT },
         { role: 'user', content: `Conversation History:\n${contextMessages}\n\nNew Query: ${newQuery}` }

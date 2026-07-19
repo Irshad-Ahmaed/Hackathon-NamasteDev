@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Streamdown } from 'streamdown';
 import { createMathPlugin } from '@streamdown/math';
 import 'katex/dist/katex.min.css';
@@ -79,12 +79,56 @@ const ChatMessage = React.memo(({ message, onFeedback, feedbackStatus }: {
 });
 ChatMessage.displayName = 'ChatMessage';
 
+const CHAPTER_NAMES: Record<Subject, Record<number, string>> = {
+  mathematics: {
+    1: 'Ch 1: Real Numbers',
+    2: 'Ch 2: Polynomials',
+    3: 'Ch 3: Linear Equations',
+    4: 'Ch 4: Quadratic Equations',
+    5: 'Ch 5: Arithmetic Progressions',
+    6: 'Ch 6: Triangles',
+    7: 'Ch 7: Coordinate Geometry',
+    8: 'Ch 8: Introduction to Trigonometry',
+    9: 'Ch 9: Some Applications of Trigonometry',
+    10: 'Ch 10: Circles',
+    11: 'Ch 11: Areas Related to Circles',
+    12: 'Ch 12: Surface Areas and Volumes',
+    13: 'Ch 13: Statistics',
+    14: 'Ch 14: Probability'
+  },
+  science: {
+    1: 'Ch 1: Chemical Reactions',
+    2: 'Ch 2: Acids, Bases, Salts',
+    3: 'Ch 3: Metals & Non-Metals',
+    4: 'Ch 4: Carbon Compounds',
+    5: 'Ch 5: Life Processes',
+    6: 'Ch 6: Control & Coordination',
+    7: 'Ch 7: How do Organisms Reproduce?',
+    8: 'Ch 8: Heredity',
+    9: 'Ch 9: Light - Reflection & Refraction',
+    10: 'Ch 10: Human Eye and Colourful World',
+    11: 'Ch 11: Electricity',
+    12: 'Ch 12: Magnetic Effects of Electric Current',
+    13: 'Ch 13: Our Environment'
+  }
+};
+
 export default function ChatPage() {
   const { subject, setSubject, chapterId, setChapterId, mode, setMode } = useSubjectFilter();
   const { messages, sendMessage, streaming, cancel } = useChat(subject, 'en', chapterId);
   const [inputText, setInputText] = useState('');
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState<Record<string, string>>({});
+  const [availableChapters, setAvailableChapters] = useState<{ mathematics: number[], science: number[] }>({ mathematics: [], science: [] });
+
+  useEffect(() => {
+    fetch('/api/chapters')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) setAvailableChapters(data);
+      })
+      .catch(console.error);
+  }, []);
 
   const handleFeedback = React.useCallback(async (messageId: string, type: 'incorrect' | 'inappropriate' | 'helpful') => {
     try {
@@ -256,29 +300,11 @@ export default function ChatPage() {
                       className="bg-secondary/40 text-foreground border border-white/5 rounded-lg px-2.5 py-1.5 max-w-[180px] md:max-w-xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-secondary/60 transition-colors truncate"
                     >
                       <option value="">📚 All Chapters</option>
-                      {subject === 'mathematics' ? (
-                        <>
-                          <option value="math-ch01">Ch 1: Real Numbers</option>
-                          <option value="math-ch02">Ch 2: Polynomials</option>
-                          <option value="math-ch03">Ch 3: Linear Equations</option>
-                          <option value="math-ch04">Ch 4: Quadratic Equations</option>
-                          <option value="math-ch05">Ch 5: Arithmetic Progressions</option>
-                          <option value="math-ch06">Ch 6: Triangles</option>
-                          <option value="math-ch07">Ch 7: Coordinate Geometry</option>
-                          <option value="math-ch08">Ch 8: Introduction to Trigonometry</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="science-ch01">Ch 1: Chemical Reactions</option>
-                          <option value="science-ch02">Ch 2: Acids, Bases, Salts</option>
-                          <option value="science-ch03">Ch 3: Metals & Non-Metals</option>
-                          <option value="science-ch04">Ch 4: Carbon Compounds</option>
-                          <option value="science-ch05">Ch 5: Life Processes</option>
-                          <option value="science-ch06">Ch 6: Control & Coordination</option>
-                          <option value="science-ch07">Ch 7: How do Organisms Reproduce?</option>
-                          <option value="science-ch08">Ch 8: Heredity</option>
-                        </>
-                      )}
+                      {availableChapters[subject]?.map(chNum => (
+                        <option key={chNum} value={String(chNum)}>
+                          {CHAPTER_NAMES[subject][chNum] || `Ch ${chNum}`}
+                        </option>
+                      ))}
                     </select>
                   </>
                 )}
