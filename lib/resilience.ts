@@ -52,7 +52,7 @@ export async function withRetry<T>(
 
     const delay = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt - 1));
     // Apply random jitter
-    const jitteredDelay = Math.random() * delay;
+    const jitteredDelay = delay / 2 + Math.random() * (delay / 2);
 
     logger.warn({
       msg: 'Transient failure. Retrying operation...',

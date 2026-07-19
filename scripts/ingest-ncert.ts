@@ -205,7 +205,7 @@ async function main() {
           curriculumVersion: process.env.CURRICULUM_VERSION || '2024-ncert',
           reviewed: false, // Must remain false until admin review
           text: chunk.text, // Store ONLY the chunk excerpt
-          officialSourceUrl: `https://ncert.nic.in/textbook.php?${subject === 'mathematics' ? 'jemh1' : 'jesc1'}=${chapterNumber - 1}`, // Sample official mapping
+          officialSourceUrl: `https://ncert.nic.in/textbook/pdf/${baseTitle}.pdf`,
         };
 
         points.push({
