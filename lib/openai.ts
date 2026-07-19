@@ -18,7 +18,7 @@ export const openai = new Proxy({} as OpenAI, {
 
 // Model config — always from env, never hardcoded
 export const models = {
-  chat: process.env.OPENAI_CHAT_MODEL!,
+  chat: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
   reasoning: process.env.OPENAI_REASONING_MODEL || 'o4-mini',
   embedding: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
   moderation: process.env.OPENAI_MODERATION_MODEL ?? 'omni-moderation-latest',

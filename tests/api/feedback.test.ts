@@ -121,11 +121,11 @@ describe('Feedback API - POST Submission', () => {
       }
       if (strings[0].includes('JOIN conversations')) {
         // message ownership check
-        return [{ id: 'msg_1' }];
+        return [{ id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d' }];
       }
-      if (strings[0].includes('SELECT id FROM feedback')) {
-        // Simulates feedback already existing to trigger 409
-        return [{ id: 'existing_feedback_1' }];
+      if (strings[0].includes('FROM feedback')) {
+        // Simulates feedback already existing with same type to trigger 409
+        return [{ id: 'existing_feedback_1', type: 'helpful' }];
       }
       return [];
     }) as any);
@@ -133,7 +133,7 @@ describe('Feedback API - POST Submission', () => {
     const { POST } = await import('../../app/api/feedback/route');
     const mockReq = new NextRequest('http://localhost/api/feedback', {
       method: 'POST',
-      body: JSON.stringify({ messageId: 'msg_1', type: 'helpful' }),
+      body: JSON.stringify({ messageId: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', type: 'helpful' }),
     });
 
     const response = await POST(mockReq);

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useStream } from './useStream';
 import type { CitationMetadata as Citation } from '@/lib/schemas';
 
@@ -10,6 +10,7 @@ export type Message = {
   citations?: Citation[];
   outcome?: string;
   streaming?: boolean;
+  feedbackType?: 'helpful' | 'incorrect' | 'inappropriate';
 };
 
 export function useChat(subject: string, language: 'en' | 'hi', chapterId?: string) {
@@ -17,12 +18,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
   const [conversationId, setConversationId] = useState<string | undefined>();
   const { readStream, streaming, cancel } = useStream();
 
-  // Reset chat context when subject, language, or chapter changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMessages([]);
-    setConversationId(undefined);
-  }, [subject, language, chapterId]);
+
 
   const sendMessage = useCallback(async (
     text: string,
@@ -57,7 +53,7 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
           activeId = event.assistantMessageId;
         }
         setMessages(prev => prev.map(m =>
-          m.id === assistantId
+          (m.id === assistantId || m.id === activeId)
             ? { ...m, id: activeId, citations: event.citations as Citation[], outcome: event.outcome }
             : m
         ));
@@ -78,5 +74,5 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
     });
   }, [subject, language, conversationId, chapterId, streaming, readStream]);
 
-  return { messages, sendMessage, streaming, cancel };
+  return { messages, sendMessage, streaming, cancel, conversationId, setConversationId, setMessages };
 }

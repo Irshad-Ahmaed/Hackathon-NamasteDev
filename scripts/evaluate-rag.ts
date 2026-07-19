@@ -4,8 +4,12 @@ dotenv.config({ path: '.env' });
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { openai, models } from '../lib/openai';
 import { qdrant, COLLECTION, ChunkPayload } from '../lib/qdrant';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface BenchmarkQuestion {
   id: string;
