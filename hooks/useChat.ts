@@ -21,7 +21,6 @@ export function useChat(subject: string, language: 'en' | 'hi', chapterId?: stri
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages([]);
-     
     setConversationId(undefined);
   }, [subject, language, chapterId]);
 

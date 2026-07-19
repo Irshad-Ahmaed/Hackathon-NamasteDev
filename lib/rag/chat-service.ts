@@ -63,22 +63,25 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
 
   let contextResults: RetrievalResult[] = [];
   let citations: CitationMetadata[] = [];
-  let topScore = 1.0;
+  // null means no retrieval was performed (bypassRAG or general chat)
+  let topScore: number | null = null;
   
+  const isQuiz = mode === 'quiz';
   // Decide whether to bypass retrieval:
-  // Bypass if the user explicitly chose General Chat, OR if reformulation classified it as chitchat
-  const bypassRAG = isGeneralChat || category === 'chitchat';
+  // Bypass if the user explicitly chose General Chat, OR if reformulation classified it as chitchat, BUT NOT in quiz mode.
+  const bypassRAG = (isGeneralChat || category === 'chitchat') && !isQuiz;
 
   const selectedModel = mode === 'solve' ? models.reasoning : models.chat;
 
   if (!bypassRAG) {
-    // 6. Retrieve Context (with filters!)
-    contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId });
+    // 6. Retrieve Context (with filters!) - Quiz mode retrieves more chunks for broader coverage
+    const retrievalLimit = isQuiz ? 8 : 5;
+    contextResults = await retrieveContext(standaloneQuery, { subject, language, chapterId }, retrievalLimit);
     citations = buildCitations(contextResults);
 
     // 7. Evaluate Retrieval Confidence (Basic Thresholding)
     topScore = contextResults[0]?.score || 0;
-    if (topScore < 0.35) {
+    if (topScore < 0.35 && !isQuiz) {
       // Low confidence -> Fallback
       const fallbackText = "I'm sorry, I couldn't find relevant information in the NCERT textbook to answer your question. I can only assist with topics covered in the Class 10 Math and Science curriculum.";
       const assistantMessageId = crypto.randomUUID();
@@ -91,7 +94,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
         subject, 
         mode: isGeneralChat ? undefined : mode, 
         outcome: 'low_confidence', 
-        retrievalTopScore: topScore, 
+        retrievalTopScore: topScore ?? undefined, 
         retrievedChunkCount: 0,
         model: selectedModel,
         inputTokens: promptTokens,
@@ -133,7 +136,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
   const assistantMessageId = requestId || crypto.randomUUID();
 
   // 8. Build Prompt & LLM Call
-  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat);
+  const promptMessages = buildPrompt(history, standaloneQuery, contextResults, bypassRAG, isGeneralChat, isQuiz);
 
   
   const stream = await createStreamingChatCompletion({
@@ -198,7 +201,7 @@ export async function executeChatPipeline(options: ChatServiceOptions): Promise<
            subject, 
            mode: isGeneralChat ? undefined : mode, 
            outcome: 'success', 
-           retrievalTopScore: topScore, 
+           retrievalTopScore: topScore ?? undefined, 
            retrievedChunkCount: contextResults.length, 
            model: selectedModel,
            inputTokens: finalPromptTokens,

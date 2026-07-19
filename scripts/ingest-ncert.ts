@@ -130,7 +130,7 @@ async function main() {
     if (!dryRun) {
       const existing = (await sql`
         SELECT id FROM ingestion_sources 
-        WHERE content_hash = ${contentHash} AND status = 'live'
+        WHERE content_hash = ${contentHash}
       `) as unknown as Array<{ id: string }>;
       if (existing.length > 0) {
         console.log(`[Idempotent] File with hash ${contentHash.slice(0, 10)}... already ingested and live. Skipping.`);

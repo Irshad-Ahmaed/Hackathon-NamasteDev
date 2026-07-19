@@ -213,18 +213,21 @@ export default function ChatPage() {
   
   const activeMessage = messages.find(m => m.streaming && m.role === 'assistant');
 
-  // Derive notes content directly from conversation history to avoid duplicate state and cascading renders
-  let lastAssistant: Message | undefined;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'assistant') {
-      lastAssistant = messages[i];
-      break;
+  // Derive notes content only when in 'notes' mode — avoids showing quiz/explain answers in the Notes Canvas.
+  // We walk backwards to find the most recent assistant message that was generated in notes mode.
+  let lastNotesAssistant: Message | undefined;
+  if (mode === 'notes') {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        lastNotesAssistant = messages[i];
+        break;
+      }
     }
   }
-  
+
   const derivedNotesContent = activeMessage && mode === 'notes'
-    ? activeMessage.content 
-    : (lastAssistant ? lastAssistant.content : '');
+    ? activeMessage.content
+    : (lastNotesAssistant ? lastNotesAssistant.content : '');
 
   return (
     <div className="flex flex-col h-screen bg-background relative overflow-hidden">
@@ -383,6 +386,8 @@ export default function ChatPage() {
         onClose={() => setIsNotesOpen(false)} 
         content={derivedNotesContent} 
         isGenerating={streaming && mode === 'notes'}
+        subject={subject}
+        chapterId={chapterId}
       />
 
       {/* Parental Consent Overlay Modal */}

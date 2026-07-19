@@ -126,3 +126,24 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  body {
+    visibility: hidden;
+    background: white !important;
+    color: black !important;
+  }
+  #notes-print-target, #notes-print-target * {
+    visibility: visible;
+    background: transparent !important;
+    color: black !important;
+  }
+  #notes-print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}

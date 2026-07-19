@@ -88,9 +88,8 @@ async function main() {
       console.log(`Successfully updated ${pointIds.length} vectors in Qdrant.`);
     }
 
-    // Use a regex match to avoid matching chapter 13 when trying to mark chapter 3 live.
-    // Matches chapter number with optional leading zeroes, bounded by non-digits.
-    const pattern = `(^|[^0-9])0*${chapterNumber}([^0-9]|$)`;
+    const padChapter = String(chapterNumber).padStart(2, '0');
+    const pattern = `1${padChapter}(\\.pdf)?$`;
     console.log(`Updating Postgres database ingestion source status to verified with pattern: ${pattern}`);
     await sql`
       UPDATE ingestion_sources
