@@ -1,24 +1,24 @@
-import { Bot, BrainCircuit, FileText } from 'lucide-react';
+import { Bot, FileText, Sparkles } from 'lucide-react';
 
 const features = [
   {
     icon: Bot,
-    title: 'Intelligent RAG Engine',
-    description: 'Answers are grounded in authentic NCERT text. No hallucinations. Every response includes direct citations to the textbook chapter and page.',
+    title: 'NCERT-Grounded Tutor',
+    description: 'Answers are grounded in authentic NCERT text with direct citations — no hallucinations. Currently live for CBSE Class 10 Mathematics and Science.',
     colorClass: 'text-primary',
     bgClass: 'bg-primary/20',
   },
   {
     icon: FileText,
-    title: 'Notes Generation Canvas',
-    description: 'Ask the tutor to create study notes and watch them generate instantly on a beautiful, resizable split-screen canvas that you can save for later.',
+    title: 'Learn & Notes, Together',
+    description: 'Chat with the tutor and watch your personal, editable revision canvas build itself on a side-by-side split screen. No copy-paste, no extra effort.',
     colorClass: 'text-blue-400',
     bgClass: 'bg-blue-500/20',
   },
   {
-    icon: BrainCircuit,
-    title: 'Four Learning Modes',
-    description: <>Switch between <i>Explain</i>, <i>Solve Problem</i>, <i>Notes</i>, or <i>Quiz Me</i> depending on what you need. Tailored AI reasoning for complex math equations.</>,
+    icon: Sparkles,
+    title: 'Built to Scale',
+    description: <>An MVP today — expanding to <i>any class &amp; subject</i>, an <i>autonomous AI agent</i> (no need to pick subject or mode), and <i>B2B + B2C</i> for schools and students.</>,
     colorClass: 'text-emerald-400',
     bgClass: 'bg-emerald-500/20',
   }
@@ -29,8 +29,8 @@ export function Features() {
     <section className="py-24 bg-card/30 border-y border-white/5 relative">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything you need to excel</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">Built strictly on the NCERT syllabus, completely private, and highly interactive.</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">A platform to learn and note-take at once</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">Built on the NCERT syllabus, completely private, and highly interactive — starting with CBSE Class 10.</p>
         </div>
         
         <div className="grid md:grid-cols-3 gap-8">
