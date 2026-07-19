@@ -25,21 +25,37 @@ You can answer any topic — science, math, history, current events, coding, lif
 Be friendly, clear, and engaging. If the student mentions school or academic topics, feel free to connect your answer to their studies where relevant.
 Always be safe, respectful, and age-appropriate for a Class 10 student.`;
 
+// Used for interactive quiz mode
+const QUIZ_SYSTEM_PROMPT = `You are StudyNotes+, an expert CBSE Class 10 AI Tutor for Math and Science.
+Your goal is to test the student by generating quiz questions (MCQs or short-answer) strictly based on the provided context (which is from the NCERT textbook).
+
+Guidelines:
+1. Generate 3 to 5 questions based on the retrieved textbook context.
+2. For each question, provide a helpful "Hint:" to guide the student, but do NOT provide the answer.
+3. Do NOT reproduce verbatim exam questions from past papers — generate similar conceptual questions instead.
+4. Format math equations using LaTeX.
+5. If the student answers, check their answers in the next turn. Tell them which answers are correct, grade their attempt, and explain the correct answers clearly using the textbook context.
+6. Format your output clearly (e.g., using "Q1.", "Hint:").`;
+
 export function buildPrompt(
   history: ChatMessage[],
   newQuery: string,
   contextResults: RetrievalResult[],
   bypassRAG?: boolean,
-  isGeneralChat?: boolean
+  isGeneralChat?: boolean,
+  isQuiz?: boolean
 ): { role: 'system' | 'user' | 'assistant'; content: string }[] {
   
   // Select the right system prompt:
   // - isGeneralChat (user picked 💬 General Chat): full freedom, no NCERT constraints
+  // - isQuiz (user picked 🎯 Quiz Me): interactive test questions with hints
   // - bypassRAG but not general (auto-detected chitchat): warm redirect to syllabus
   // - Academic mode: strict NCERT context-grounded answers
   let systemPrompt: string;
   if (isGeneralChat) {
     systemPrompt = GENERAL_CHAT_SYSTEM_PROMPT;
+  } else if (isQuiz) {
+    systemPrompt = QUIZ_SYSTEM_PROMPT;
   } else if (bypassRAG) {
     systemPrompt = CHITCHAT_SYSTEM_PROMPT;
   } else {
@@ -65,6 +81,8 @@ export function buildPrompt(
   let augmentedQuery: string;
   if (isGeneralChat) {
     augmentedQuery = newQuery;
+  } else if (isQuiz) {
+    augmentedQuery = `Context Information:\n${contextString}\n\nStudent's Input/Response: ${newQuery}\n\nPlease generate a quiz or evaluate the student's answer based strictly on the Context Information.`;
   } else if (bypassRAG) {
     augmentedQuery = `Student's Input: ${newQuery}`;
   } else {

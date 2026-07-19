@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const rows = (await sql`
-      SELECT subject, title, chapter_number
+      SELECT subject, title
       FROM ingestion_sources 
-      WHERE status = 'live'
-    `) as unknown as Array<{ subject: string; title: string; chapter_number: number | null }>;
+      WHERE status IN ('live', 'verified')
+    `) as unknown as Array<{ subject: string; title: string; chapter_number?: number | null }>;
     
     const chapters: Record<string, number[]> = {
       mathematics: [],
